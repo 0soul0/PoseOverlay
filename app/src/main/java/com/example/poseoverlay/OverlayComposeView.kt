@@ -1,13 +1,15 @@
 package com.example.poseoverlay
 
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,9 +28,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
@@ -58,30 +64,61 @@ fun OverlayComposeView(
     state: OverlayState,
     onToggleTouch: (Boolean) -> Unit,
     onMinimize: () -> Unit,
+    onMaximize: () -> Unit,
     onClose: () -> Unit,
-    onPickImage: () -> Unit
+    onOpenGallery: () -> Unit,
+    onMove: (Float, Float) -> Unit,
+    onCategorySelect: (String) -> Unit,
+    onImageSelect: (com.example.poseoverlay.data.ImageEntity) -> Unit
 ) {
     if (state.isMinimized) {
-        FloatingBubble(onClick = onMinimize)
+        FloatingBubble(
+            alpha = state.alpha,
+            onMaximize = onMaximize,
+            onMove = onMove,
+            onAlphaChange = { diff ->
+                state.alpha = (state.alpha - diff / 500f).coerceIn(0.1f, 1f)
+            }
+        )
     } else {
         OverlayContent(
             state = state,
             onToggleTouch = onToggleTouch,
             onMinimize = onMinimize,
             onClose = onClose,
-            onPickImage = onPickImage
+            onOpenGallery = onOpenGallery,
+            onCategorySelect = onCategorySelect,
+            onImageSelect = onImageSelect
         )
     }
 }
 
 @Composable
-fun FloatingBubble(onClick: () -> Unit) {
+fun FloatingBubble(
+    alpha: Float,
+    onMaximize: () -> Unit,
+    onMove: (Float, Float) -> Unit,
+    onAlphaChange: (Float) -> Unit
+) {
     Box(
         modifier = Modifier
-            .size(56.dp)
+            .size(60.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
-            .clickable { onClick() },
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y)) {
+                             onMove(dragAmount.x, dragAmount.y)
+                        } else {
+                             onAlphaChange(dragAmount.y)
+                        }
+                    },
+                    onDragEnd = { }
+                )
+            }
+            .clickable { onMaximize() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -98,7 +135,9 @@ fun OverlayContent(
     onToggleTouch: (Boolean) -> Unit,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
-    onPickImage: () -> Unit
+    onOpenGallery: () -> Unit,
+    onCategorySelect: (String) -> Unit,
+    onImageSelect: (com.example.poseoverlay.data.ImageEntity) -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxSize()
@@ -106,7 +145,6 @@ fun OverlayContent(
         // Transparent Image Layer
         TransformableImage(state = state)
 
-        // Note Layer
         if (state.isNoteVisible) {
             NoteBox(
                 text = state.noteText,
@@ -116,106 +154,160 @@ fun OverlayContent(
             )
         }
 
-        // Modern Controls Layer (Floating Pill at Bottom)
         if (!state.isLocked) {
-             ControlPanel(
+             ExpandableControlPanel(
                  modifier = Modifier
                      .align(Alignment.BottomCenter)
-                     .padding(bottom = 32.dp),
-                 alpha = state.alpha,
+                     .padding(bottom = 24.dp),
+                 state = state,
                  onAlphaChange = { state.alpha = it },
-                 isLocked = state.isLocked,
                  onLockToggle = {
                      val newLockState = !state.isLocked
                      state.isLocked = newLockState
                      onToggleTouch(!newLockState)
                  },
                  onMinimize = onMinimize,
-                 onPickImage = onPickImage,
+                 onOpenGallery = onOpenGallery,
                  onNoteToggle = { state.isNoteVisible = !state.isNoteVisible },
-                 onClose = onClose
+                 onClose = onClose,
+                 onCategorySelect = onCategorySelect,
+                 onImageSelect = onImageSelect
              )
         }
     }
 }
 
 @Composable
-fun ControlPanel(
+fun ExpandableControlPanel(
     modifier: Modifier = Modifier,
-    alpha: Float,
+    state: OverlayState,
     onAlphaChange: (Float) -> Unit,
-    isLocked: Boolean,
     onLockToggle: () -> Unit,
     onMinimize: () -> Unit,
-    onPickImage: () -> Unit,
+    onOpenGallery: () -> Unit,
     onNoteToggle: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onCategorySelect: (String) -> Unit,
+    onImageSelect: (com.example.poseoverlay.data.ImageEntity) -> Unit
 ) {
-    // A sleek, glass-morphism style pill
-    Surface(
-        modifier = modifier
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(28.dp)),
-        color = Color.Black.copy(alpha = 0.7f),
-        contentColor = Color.White
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Top Row: Functional Buttons
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                 IconButton(onClick = onPickImage) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Pick Image", tint = Color.White)
-                }
-                
-                IconButton(onClick = onNoteToggle) {
-                    Icon(Icons.Default.Edit, contentDescription = "Note", tint = Color.White)
-                }
+    var expanded by remember { mutableStateOf(false) }
 
-                IconButton(onClick = onLockToggle) {
-                    Icon(
-                        if (isLocked) Icons.Default.Lock else Icons.Outlined.LockOpen,
-                        contentDescription = "Lock", 
-                        tint = if(isLocked) MaterialTheme.colorScheme.primary else Color.White
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(Color.Black.copy(alpha = 0.7f))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (expanded) {
+            // Expanded View
+            
+            // Categories
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                items(state.categories.size) { index ->
+                    val cat = state.categories[index]
+                    androidx.compose.material3.FilterChip(
+                        selected = state.selectedCategory == cat,
+                        onClick = { onCategorySelect(cat) },
+                        label = { Text(cat, color = if(state.selectedCategory == cat) Color.Black else Color.White) }, 
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.White.copy(alpha = 0.2f),
+                            labelColor = Color.White
+                        ),
+                        border = null
                     )
                 }
+            }
 
-                IconButton(onClick = onMinimize) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White)
+            // Images
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                items(state.images.size) { index ->
+                    val img = state.images[index]
+                    AsyncImage(
+                        model = img.uriString,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Gray)
+                            .clickable { onImageSelect(img) },
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.error)
+            // Controls Row (Similar to original but cleaner)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+            ) {
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+                    IconButton(onClick = onOpenGallery) { Icon(Icons.Default.Image, "Gallery", tint = Color.White) }
+                    IconButton(onClick = onNoteToggle) { Icon(Icons.Default.Edit, "Note", tint = Color.White) }
+                    IconButton(onClick = onLockToggle) { Icon(Icons.Outlined.LockOpen, "Lock", tint = Color.White) }
+                    IconButton(onClick = onMinimize) { Icon(Icons.Default.KeyboardArrowDown, "Minimize", tint = Color.White) }
+                }
+                
+                IconButton(
+                    onClick = { onClose() },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.error)
                 }
             }
             
-            // Bottom Row: Alpha Slider (Compact)
+            Spacer(modifier = Modifier.size(16.dp))
+            
+            // Collapse Button
+             IconButton(
+                onClick = { expanded = false },
+                modifier = Modifier.background(Color.White.copy(alpha = 0.2f), CircleShape)
+            ) {
+                Icon(Icons.Default.KeyboardArrowDown, "Collapse", tint = Color.White)
+            }
+
+        } else {
+            // Collapsed View: Slider + Expand Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.width(280.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Opacity",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.LightGray,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
+                // Alpha Slider (Taking most space)
                 Slider(
-                    value = alpha,
+                    value = state.alpha,
                     onValueChange = onAlphaChange,
                     valueRange = 0.1f..1f,
                     colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
+                        thumbColor = Color.White,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = Color.Gray
+                        inactiveTrackColor = Color.White.copy(0.3f)
                     ),
                     modifier = Modifier.weight(1f)
                 )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Expand Button
+                IconButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.Menu,
+                        contentDescription = "Expand",
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
@@ -260,13 +352,17 @@ fun TransformableImage(state: OverlayState) {
              ) {
                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.AddPhotoAlternate, 
+                        Icons.Default.Image, 
                         contentDescription = null, 
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(64.dp),
                         tint = Color.White.copy(alpha = 0.5f)
                     )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Select an image to overlay", color = Color.White.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.size(16.dp))
+                    Text(
+                        "Tap Menu > Gallery to select image", 
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                  }
              }
         }
@@ -281,14 +377,19 @@ fun NoteBox(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color.Black.copy(alpha = 0.7f),
-        shape = RoundedCornerShape(16.dp),
+        color = Color.Black.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(24.dp),
         modifier = modifier
             .padding(32.dp)
             .fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(), 
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Notes", color = Color.White, style = MaterialTheme.typography.titleMedium)
                 IconButton(onClick = onClose) {
                     Icon(Icons.Default.Close, contentDescription = "Close Note", tint = Color.White)
                 }
@@ -305,9 +406,47 @@ fun NoteBox(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 ),
-                placeholder = { Text("Enter shooting tips...", color = Color.Gray) },
+                placeholder = { Text("Write your thoughts...", color = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
                 maxLines = 5
+            )
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview
+@Composable
+fun ExpandableControlPanelPreview() {
+    MaterialTheme {
+        Box(modifier = Modifier.padding(20.dp).background(Color.Gray)) {
+            ExpandableControlPanel(
+                state = OverlayState().apply { 
+                    categories = listOf("All", "Portrait", "Hand")
+                    alpha = 0.7f 
+                },
+                onAlphaChange = {},
+                onLockToggle = {},
+                onMinimize = {},
+                onOpenGallery = {},
+                onNoteToggle = {},
+                onClose = {},
+                onCategorySelect = {},
+                onImageSelect = {}
+            )
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview
+@Composable
+fun NoteBoxPreview() {
+    MaterialTheme {
+        Box(modifier = Modifier.padding(20.dp).background(Color.Gray)) {
+            NoteBox(
+                text = "Sample Note",
+                onTextChange = {},
+                onClose = {}
             )
         }
     }
