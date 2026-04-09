@@ -26,4 +26,7 @@ interface ImageDao {
     
     @Query("SELECT DISTINCT category FROM images")
     fun getAllCategories(): Flow<List<String>>
+
+    @Query("UPDATE images SET category = 'Uncategorized' WHERE category = :category")
+    suspend fun moveCategoryToUncategorized(category: String)
 }

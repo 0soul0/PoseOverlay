@@ -17,8 +17,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Stateful wrapper — 目前沒有 ViewModel，但保留作為日後擴展入口
+//  （例如：取 user name、上次使用紀錄等）
+// ═══════════════════════════════════════════════════════════════════════════
 @Composable
 fun HomeScreen(
+    onStartClick: () -> Unit
+) {
+    // 未來有狀態邏輯放這裡
+    HomeContent(onStartClick = onStartClick)
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Pure UI — 完全不依賴外部狀態，可直接 Preview
+// ═══════════════════════════════════════════════════════════════════════════
+@Composable
+fun HomeContent(
     onStartClick: () -> Unit
 ) {
     Column(
@@ -34,10 +51,9 @@ fun HomeScreen(
             modifier = Modifier
                 .size(280.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer), // Peach
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            // Placeholder Icon or Image
             Icon(
                 imageVector = Icons.Default.CameraAlt,
                 contentDescription = null,
@@ -53,7 +69,7 @@ fun HomeScreen(
             style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Text(
             text = "The easiest way to perfect your shot",
             style = MaterialTheme.typography.bodyLarge,
@@ -80,11 +96,14 @@ fun HomeScreen(
     }
 }
 
-@Preview(showBackground = true)
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Previews — 直接呼叫 HomeContent
+// ═══════════════════════════════════════════════════════════════════════════
+@Preview(showBackground = true, name = "Home Screen")
 @Composable
-fun HomeScreenPreview() {
+fun HomeContentPreview() {
     PoseOverlayTheme {
-        HomeScreen(onStartClick = {})
+        HomeContent(onStartClick = {})
     }
 }
-

@@ -1,28 +1,25 @@
 package com.example.poseoverlay
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
 import com.example.poseoverlay.ui.gallery.*
-import com.example.poseoverlay.ui.home.HomeScreen
+import com.example.poseoverlay.ui.navigation.Screen
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 
 @OptIn(ExperimentalMaterial3Api::class) // For BadgedBox if used, or just suppression
@@ -51,7 +48,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         database = AppDatabase.getDatabase(applicationContext)
-        repository = ImageRepository(database.imageDao())
+        repository = ImageRepository(database.imageDao(),database.categoryDao())
         viewModelFactory = GalleryViewModelFactory(application, repository)
 
         checkPermission()
@@ -95,76 +92,101 @@ class MainActivity : ComponentActivity() {
             action = OverlayService.ACTION_SET_IMAGE
             putExtra(OverlayService.EXTRA_IMAGE_URI, uriString)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
+        startForegroundService(serviceIntent)
         moveTaskToBack(true)
     }
 }
 
 @Composable
 fun MainAppScaffold(
-    viewModelFactory: GalleryViewModelFactory,
-    onLaunchOverlay: (String) -> Unit
+    viewModelFactory: GalleryViewModelFactory?,
+    onLaunchOverlay: ((String) -> Unit)?
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val viewModel: GalleryViewModel = viewModel(factory = viewModelFactory)
+    val viewModel: GalleryViewModel = if (viewModelFactory != null) {
+        viewModel(factory = viewModelFactory)
+    } else {
+        return
+    }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.secondary
+    if (onLaunchOverlay == null) return
+
+    val navController = rememberNavController()
+
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Gallery.route
+    ) {
+        composable(Screen.Gallery.route) {
+            GalleryScreen(
+                viewModel = viewModel,
+                onImageSelect = onLaunchOverlay,
+                onEditImage = { img ->
+                    val encodedUri = Uri.encode(img.uriString)
+                    navController.navigate(
+                        Screen.ImageEdit.createRoute(encodedUri, img.category, img.description)
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = "Library") },
-                    label = { Text("Library") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.secondary
-                    )
-                )
-            }
+                },
+                onAddImage = { uri ->
+                    val encodedUri = Uri.encode(uri.toString())
+                    navController.navigate(Screen.ImageAdd.createRoute(encodedUri))
+                }
+            )
         }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            when (selectedTab) {
-                0 -> HomeScreen(onStartClick = { selectedTab = 1 }) // Enter goes to library
-                1 -> GalleryScreen(
-                    viewModel = viewModel,
-                    onImageSelect = onLaunchOverlay
-                )
-            }
+
+        composable(
+            route = Screen.ImageEdit.route,
+            arguments = listOf(
+                navArgument(Screen.ImageEdit.argUri) { type = NavType.StringType },
+                navArgument(Screen.ImageEdit.argCategory) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Screen.ImageEdit.argDescription) { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val decoded = Uri.decode(backStackEntry.arguments?.getString(Screen.ImageEdit.argUri))
+            val uri = Uri.parse(decoded)
+            val initialCategory = backStackEntry.arguments?.getString(Screen.ImageEdit.argCategory) ?: ""
+            val initialDescription = backStackEntry.arguments?.getString(Screen.ImageEdit.argDescription) ?: ""
+            val categories by viewModel.categories.collectAsState()
+
+            ImageEditScreen(
+                uri = uri,
+                initialCategory = initialCategory,
+                initialDescription = initialDescription,
+                existingCategories = categories,
+                onDismiss = { navController.popBackStack() },
+                onConfirm = { cat, desc ->
+                    viewModel.addImage(uri, cat, "", desc)
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = Screen.ImageAdd.route,
+            arguments = listOf(navArgument(Screen.ImageAdd.argUri) { type = NavType.StringType })
+        ) { backStackEntry ->
+            val decoded = Uri.decode(backStackEntry.arguments?.getString(Screen.ImageAdd.argUri))
+            val uri = decoded.toUri()
+            val categories by viewModel.categories.collectAsState()
+
+            AddImageScreen(
+                uri = uri,
+                categories = categories,
+                onDismiss = { navController.popBackStack() },
+                onConfirm = { cat, desc ->
+                    viewModel.addImage(uri, cat, "", desc)
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }
 
-@Preview(showBackground = true)
+
+@Preview(showBackground = true, name = "Main App — Home Tab")
 @Composable
 fun MainAppScaffoldPreview() {
     PoseOverlayTheme {
-        // Mock factory for preview - won't actually work but allows UI preview
-        MainAppScaffold(
-            viewModelFactory = GalleryViewModelFactory(
-                application = androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application,
-                repository = ImageRepository(AppDatabase.getDatabase(androidx.compose.ui.platform.LocalContext.current).imageDao())
-            ),
-            onLaunchOverlay = {}
-        )
+        MainAppScaffold(null, null)
     }
 }
 

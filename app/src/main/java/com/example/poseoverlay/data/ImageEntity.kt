@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "images")
 data class ImageEntity(
     @PrimaryKey val uriString: String,
+    val name:String,
     val category: String,
     val tags: String = "", // Stored as comma-separated values
     val description: String = ""

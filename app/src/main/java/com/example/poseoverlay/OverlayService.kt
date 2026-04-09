@@ -47,7 +47,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
     override fun onCreate() {
         super.onCreate()
         val db = com.example.poseoverlay.data.AppDatabase.getDatabase(applicationContext)
-        repository = com.example.poseoverlay.data.ImageRepository(db.imageDao())
+        repository = com.example.poseoverlay.data.ImageRepository(db.imageDao(),db.categoryDao())
         savedStateRegistryController.performRestore(null)
         
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
