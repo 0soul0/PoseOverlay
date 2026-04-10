@@ -1,22 +1,13 @@
 package com.example.poseoverlay.ui.gallery
 
-import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,11 +26,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.gallery.components.AddImageGridItem
+import com.example.poseoverlay.ui.gallery.components.GalleryItem
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
+import java.io.File
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Stateful wrapper — owns ViewModel + Activity launchers
@@ -52,20 +45,14 @@ fun GalleryScreen(
     onImageSelect: (String) -> Unit
 ) {
     val context = LocalContext.current
-
     val images by viewModel.images.collectAsState()
-
     val categories by viewModel.categories.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
-
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let { contentUri ->
             try {
-                // 立刻把 content:// 複製到 cacheDir，得到穩定的 file:// URI
-                // 這樣 AddImageScreen 預覽就不會有 SecurityException
-                val tempFile = java.io.File(context.cacheDir, "img_preview_${System.currentTimeMillis()}.jpg")
+                val tempFile = File(context.cacheDir, "img_preview_${System.currentTimeMillis()}.jpg")
                 context.contentResolver.openInputStream(contentUri)?.use { input ->
                     tempFile.outputStream().use { output ->
                         input.copyTo(output)
@@ -74,21 +61,19 @@ fun GalleryScreen(
                 val fileUri = Uri.fromFile(tempFile)
                 onAddImage(fileUri)
             } catch (e: Exception) {
-                android.util.Log.e("Gallery", "Failed to copy to cache: ${e.message}", e)
+                Log.e("Gallery", "Failed to copy to cache: ${e.message}", e)
                 onAddImage(contentUri)
             }
         }
     }
 
     GalleryContent(
-        images           = images,
-        categories       = categories,
-        selectedCategory = selectedCategory,
-        onSelectCategory = { viewModel.selectCategory(it) },
-        onImageSelect    = onImageSelect,
-        onDeleteImage     = { viewModel.deleteImage(it) },
-        onAddClick        = { imagePicker.launch(arrayOf("image/*")) },
-        onEditImage       = onEditImage
+        images = images,
+        categories = categories,
+        onImageSelect = onImageSelect,
+        onDeleteImage = { viewModel.deleteImage(it) },
+        onAddClick = { imagePicker.launch(arrayOf("image/*")) },
+        onEditImage = onEditImage
     )
 }
 
@@ -98,11 +83,9 @@ fun GalleryScreen(
 // ═══════════════════════════════════════════════════════════════════════════
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GalleryContent(
+private fun GalleryContent(
     images: List<ImageEntity>,
     categories: List<String>,
-    selectedCategory: String,
-    onSelectCategory: (String) -> Unit,
     onImageSelect: (String) -> Unit,
     onDeleteImage: (ImageEntity) -> Unit,
     onAddClick: () -> Unit,
@@ -114,22 +97,13 @@ fun GalleryContent(
     var showInfoDialog by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val safeCategories = categories.filter { it.isNotBlank() }
-    // 將 "add" 按鈕放到列表最前面或最後面
+
     val gridItems = images + ImageEntity("add", "", "", "", "")
     val gridState = rememberLazyGridState()
-    
-    // 計算標題是否該切換：當第一個可見項目的索引超過 Albums 建立的索引值（例如 Albums + 標題佔了 2 個 item）
-    val showAllPhotosTitle by remember {
-        derivedStateOf {
-            // 根據你的佈局，Albums 標題是 item(0)，Horizontal Grid 是 item(1)，All Photos 標題是 item(2)
-            // 所以當索引 >= 2 時，切換標題
-            gridState.firstVisibleItemIndex >= 2
-        }
-    }
-    
+    //滑動到最下面
     LaunchedEffect(gridItems.size) {
         if (gridItems.isNotEmpty()) {
-            // gridState.animateScrollToItem(index = gridItems.size - 1)
+            gridState.animateScrollToItem(index = gridItems.size - 1)
         }
     }
 
@@ -169,7 +143,7 @@ fun GalleryContent(
             TopAppBar(
                 title = {
                     Text(
-                        text =  "Gallery",
+                        text = "Gallery",
                         fontWeight = FontWeight.ExtraBold,
                         style = MaterialTheme.typography.headlineSmall
                     )
@@ -190,7 +164,8 @@ fun GalleryContent(
         ) {
             // 1. Albums 標題
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Albums",
+                Text(
+                    "Albums",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
@@ -220,7 +195,8 @@ fun GalleryContent(
 
             // 3. Photos 標題
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Photos",
+                Text(
+                    "Photos",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
@@ -236,7 +212,9 @@ fun GalleryContent(
                         GalleryItem(
                             img,
                             onClick = { selectedImageForDetail = img },
-                            onLongClick = { imageToDelete = img }
+                            onDelete = { imageToDelete = img },
+                            onEdit = { onEditImage(img) },
+                            onStart = { onImageSelect(img.uriString) }
                         )
                     }
                 }
@@ -254,9 +232,13 @@ fun GalleryContent(
             modifier = Modifier.fillMaxSize(),
             color = Color.White
         ) {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())) {
                 // Header (Banner)
-                Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(folderImages.firstOrNull()?.uriString ?: "")
@@ -266,16 +248,22 @@ fun GalleryContent(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                    Box(modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)))
 
-                    Column(modifier = Modifier.align(Alignment.BottomStart).padding(24.dp)) {
+                    Column(modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(24.dp)) {
                         Text(currentCat, color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                         Text("${folderImages.size} Items", color = Color.White.copy(alpha = 0.8f))
                     }
 
                     IconButton(
                         onClick = { inCategoryDetail = null },
-                        modifier = Modifier.statusBarsPadding().padding(8.dp)
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(8.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Back", tint = Color.White)
                     }
@@ -283,23 +271,36 @@ fun GalleryContent(
 
                 // Grid in folder
                 val gridWithAdd = folderImages + ImageEntity("add", "", "", "", "")
-                gridWithAdd.chunked(3).forEach { row ->
+                gridWithAdd.chunked(4).forEach { row ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(120.dp).padding(horizontal = 2.dp, vertical = 1.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .padding(horizontal = 2.dp, vertical = 1.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         row.forEach { img ->
                             if (img.uriString == "add") {
-                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                Box(modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()) {
                                     AddImageGridItem(onClick = onAddClick)
                                 }
                             } else {
-                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                    GalleryItem(img, onClick = { selectedImageForDetail = img }, onLongClick = { imageToDelete = img })
+                                Box(modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()) {
+                                    GalleryItem(
+                                        img,
+                                        onClick = { selectedImageForDetail = img },
+                                        onDelete = { imageToDelete = img },
+                                        onEdit = { onEditImage(img) },
+                                        onStart = { onImageSelect(img.uriString) }
+                                    )
                                 }
                             }
                         }
-                        repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+                        repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
                 Spacer(modifier = Modifier.height(100.dp))
@@ -394,10 +395,12 @@ fun GalleryContent(
 }
 
 @Composable
-fun AlbumCard(title: String, count: Int, previewUri: String?, onClick: () -> Unit) {
+private fun AlbumCard(title: String, count: Int, previewUri: String?, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.width(260.dp).padding(0.dp),
+        modifier = Modifier
+            .width(260.dp)
+            .padding(0.dp),
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFFF2F2F7)
 
@@ -451,46 +454,6 @@ fun AlbumCard(title: String, count: Int, previewUri: String?, onClick: () -> Uni
 }
 
 @Composable
-fun AddImageGridItem(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(Icons.Default.Add, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun GalleryItem(
-    image: ImageEntity,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(image.uriString)
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-    }
-}
-@Composable
 fun DetailActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -509,13 +472,11 @@ fun DetailActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 fun GalleryContentEmptyPreview() {
     PoseOverlayTheme {
         GalleryContent(
-            images           = emptyList(),
-            categories       = listOf("Portrait", "Full Body"),
-            selectedCategory = "All",
-            onSelectCategory = {},
-            onImageSelect    = {},
-            onDeleteImage    = {},
-            onAddClick       = {},
+            images = emptyList(),
+            categories = listOf("Portrait", "Full Body"),
+            onImageSelect = {},
+            onDeleteImage = {},
+            onAddClick = {},
             onEditImage = {}
         )
     }

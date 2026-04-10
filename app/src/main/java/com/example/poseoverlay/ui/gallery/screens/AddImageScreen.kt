@@ -1,19 +1,10 @@
-package com.example.poseoverlay.ui.gallery
+package com.example.poseoverlay.ui.gallery.screens
 
-import android.app.Activity
-import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -28,55 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.poseoverlay.ui.theme.PoseOverlayTheme
-import androidx.core.net.toUri
-
-class AddImageActivity : ComponentActivity() {
-    
-    companion object {
-        const val EXTRA_IMAGE_URI = "extra_image_uri"
-        const val EXTRA_CATEGORIES = "extra_categories"
-        const val EXTRA_CATEGORY = "extra_category"
-        const val EXTRA_DESCRIPTION = "extra_description"
-        const val RESULT_CODE_SAVED = RESULT_OK
-    }
-    
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        val imageUri = intent.getStringExtra(EXTRA_IMAGE_URI)?.toUri()
-        // 移除預設資料夾，只使用資料庫現有的
-        val initialCategory = intent.getStringExtra(EXTRA_CATEGORY) ?: ""
-        val initialDescription = intent.getStringExtra(EXTRA_DESCRIPTION) ?: ""
-        val categories = intent.getStringArrayListExtra(EXTRA_CATEGORIES) ?: arrayListOf()
-        
-        if (imageUri == null) {
-            finish()
-            return
-        }
-
-        setContent {
-            PoseOverlayTheme {
-                AddImageScreen(
-                    uri = imageUri,
-                    categories = categories,
-                    initialCategory = initialCategory,
-                    initialDescription = initialDescription,
-                    onDismiss = { finish() },
-                    onConfirm = { category, description ->
-                        val resultIntent = Intent().apply {
-                            putExtra(EXTRA_CATEGORY, category)
-                            putExtra(EXTRA_DESCRIPTION, description)
-                            putExtra(EXTRA_IMAGE_URI, imageUri.toString())
-                        }
-                        setResult(RESULT_CODE_SAVED, resultIntent)
-                        finish()
-                    }
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +32,7 @@ fun AddImageScreen(
 ) {
     var newCategory by remember { mutableStateOf(initialCategory) }
     var description by remember { mutableStateOf(initialDescription) }
-    var selectedChip by remember { mutableStateOf(if (initialCategory.isBlank()) "Uncategorized" else initialCategory) }
+    var selectedChip by remember { mutableStateOf(initialCategory.ifBlank { "" }) }
 
     LaunchedEffect(selectedChip) {
         newCategory = selectedChip
@@ -183,7 +125,7 @@ fun AddImageScreen(
 
                 // Combined Dropdown + TextField
                 var expanded by remember { mutableStateOf(false) }
-                
+
                 ExposedDropdownMenuBox(
                     expanded = expanded,
                     onExpandedChange = { expanded = !expanded }

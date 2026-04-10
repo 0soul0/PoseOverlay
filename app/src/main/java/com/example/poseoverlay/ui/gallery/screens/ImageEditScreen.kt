@@ -1,16 +1,10 @@
-package com.example.poseoverlay.ui.gallery
+package com.example.poseoverlay.ui.gallery.screens
 
-import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,54 +15,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.poseoverlay.ui.theme.PoseOverlayTheme
-import androidx.core.net.toUri
-
-class ImageEditActivity : ComponentActivity() {
-    companion object {
-        const val EXTRA_IMAGE_URI = "extra_image_uri"
-        const val EXTRA_CATEGORY = "extra_category"
-        const val EXTRA_DESCRIPTION = "extra_description"
-        const val EXTRA_CATEGORIES = "extra_categories"
-        const val RESULT_CODE_UPDATED = 2002
-    }
-
-    @OptIn(ExperimentalMaterial3Api::class)
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        val imageUri = intent.getStringExtra(EXTRA_IMAGE_URI)?.toUri()
-        val initialCategory = intent.getStringExtra(EXTRA_CATEGORY) ?: ""
-        val initialDescription = intent.getStringExtra(EXTRA_DESCRIPTION) ?: ""
-        val allCategories = intent.getStringArrayListExtra(EXTRA_CATEGORIES) ?: arrayListOf()
-        
-        if (imageUri == null) {
-            finish()
-            return
-        }
-
-        setContent {
-            PoseOverlayTheme {
-                ImageEditScreen(
-                    uri = imageUri,
-                    initialCategory = initialCategory,
-                    initialDescription = initialDescription,
-                    existingCategories = allCategories,
-                    onDismiss = { finish() },
-                    onConfirm = { category, description ->
-                        val resultIntent = Intent().apply {
-                            putExtra(EXTRA_CATEGORY, category)
-                            putExtra(EXTRA_DESCRIPTION, description)
-                            putExtra(EXTRA_IMAGE_URI, imageUri.toString())
-                        }
-                        setResult(RESULT_CODE_UPDATED, resultIntent)
-                        finish()
-                    }
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

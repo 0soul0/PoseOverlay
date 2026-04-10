@@ -24,7 +24,8 @@
             android:name=".OverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ForegroundServicePermission">
         </service>
 
         <activity
@@ -38,16 +39,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-        <activity
-            android:name=".ui.gallery.AddImageActivity"
-            android:exported="false"
-            android:theme="@style/Theme.PoseOverlay" />
-        
-        <activity
-            android:name=".ui.gallery.ImageEditActivity"
-            android:exported="false"
-            android:theme="@style/Theme.PoseOverlay" />
     </application>
 
 </manifest>

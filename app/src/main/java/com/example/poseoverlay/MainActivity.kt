@@ -19,6 +19,9 @@ import androidx.navigation.navArgument
 import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
 import com.example.poseoverlay.ui.gallery.*
+import com.example.poseoverlay.ui.gallery.screens.AddImageScreen
+import com.example.poseoverlay.ui.gallery.screens.ImageEditScreen
+import com.example.poseoverlay.ui.gallery.GalleryScreen
 import com.example.poseoverlay.ui.navigation.Screen
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 
