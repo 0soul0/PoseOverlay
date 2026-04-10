@@ -55,9 +55,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 @Composable
 fun OverlayComposeView(
@@ -233,7 +235,10 @@ fun ExpandableControlPanel(
                 items(state.images.size) { index ->
                     val img = state.images[index]
                     AsyncImage(
-                        model = img.uriString,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(img.uriString)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = null,
                         modifier = Modifier
                             .size(64.dp)
@@ -332,7 +337,10 @@ fun TransformableImage(state: OverlayState) {
     ) {
          if (state.imageUri != null) {
             AsyncImage(
-                model = state.imageUri,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(state.imageUri)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()

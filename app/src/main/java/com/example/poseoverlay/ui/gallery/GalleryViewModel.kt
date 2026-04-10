@@ -21,7 +21,7 @@ class GalleryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val images = combine(repository.getAllImages(), _selectedCategory) { allImages, category ->
-        allImages
+        if (category == "All") allImages else allImages.filter { it.category == category }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun selectCategory(category: String) {
@@ -31,16 +31,24 @@ class GalleryViewModel(
     fun addImage(uri: Uri, category: String, tags: String = "", description: String = "") {
         viewModelScope.launch {
             try {
-                val contentResolver = getApplication<Application>().contentResolver
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                val context = getApplication<Application>()
+                val fileName = "img_${System.currentTimeMillis()}.jpg"
+                val destFile = java.io.File(context.filesDir, fileName)
+
+                // file:// used for cache copies; content:// used as fallback
+                val inputStream = when (uri.scheme) {
+                    "file" -> java.io.FileInputStream(java.io.File(requireNotNull(uri.path)))
+                    else   -> context.contentResolver.openInputStream(uri)
+                }
+
+                inputStream?.use { input ->
+                    destFile.outputStream().use { output -> input.copyTo(output) }
+                }
+
+                repository.insertImage(Uri.fromFile(destFile).toString(), category, tags, description)
             } catch (e: Exception) {
-                // Log or ignore if already granted/not possible
-                e.printStackTrace()
+                Log.e("GalleryViewModel", "Failed to save image: ${e.message}", e)
             }
-            repository.insertImage(uri.toString(), category, tags, description)
         }
     }
 

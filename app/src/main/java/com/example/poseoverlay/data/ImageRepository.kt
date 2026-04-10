@@ -29,7 +29,15 @@ class ImageRepository(
         }
 
     suspend fun insertImage(uri: String, category: String, tags: String = "", description: String = "") {
-        imageDao.insertImage(ImageEntity(uri, category, tags, description))
+        imageDao.insertImage(
+            ImageEntity(
+                uriString = uri,
+                name = "", // Or extract name from URI if needed
+                category = category,
+                tags = tags,
+                description = description
+            )
+        )
         // Auto-register the category so it survives even if all images are deleted
         categoryDao.insertCategory(CategoryEntity(category))
     }

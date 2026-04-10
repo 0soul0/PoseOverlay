@@ -24,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 import androidx.core.net.toUri
 
@@ -149,7 +151,19 @@ fun AddImageScreen(
                     .background(surfaceColor)
             ) {
                 AsyncImage(
-                    model = uri,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(uri)
+                        .crossfade(true)
+                        .allowHardware(false) // Common fix for local URIs
+                        .listener(
+                            onError = { _, result ->
+                                Log.e("PoseOverlay", "AsyncImage Error: ${result.throwable}")
+                            },
+                            onSuccess = { _, _ ->
+                                Log.d("PoseOverlay", "AsyncImage Success")
+                            }
+                        )
+                        .build(),
                     contentDescription = "Preview",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -164,6 +178,7 @@ fun AddImageScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+
                 Text("Album", color = textColor.copy(alpha = 0.5f), style = MaterialTheme.typography.labelMedium)
 
                 // Combined Dropdown + TextField

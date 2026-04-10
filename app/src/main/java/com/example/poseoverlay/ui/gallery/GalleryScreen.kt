@@ -37,6 +37,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 
@@ -59,18 +60,23 @@ fun GalleryScreen(
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
+    ) { uri: Uri? ->
+        uri?.let { contentUri ->
             try {
-                // 取得持久性 URI 讀取權限，確保在導航跳轉後權限不失效
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                // 立刻把 content:// 複製到 cacheDir，得到穩定的 file:// URI
+                // 這樣 AddImageScreen 預覽就不會有 SecurityException
+                val tempFile = java.io.File(context.cacheDir, "img_preview_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(contentUri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val fileUri = Uri.fromFile(tempFile)
+                onAddImage(fileUri)
             } catch (e: Exception) {
-                android.util.Log.e("Gallery", "Failed to take persistable permission", e)
+                android.util.Log.e("Gallery", "Failed to copy to cache: ${e.message}", e)
+                onAddImage(contentUri)
             }
-            onAddImage(uri)
         }
     }
 
@@ -252,7 +258,10 @@ fun GalleryContent(
                 // Header (Banner)
                 Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
                     AsyncImage(
-                        model = folderImages.firstOrNull()?.uriString ?: "",
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(folderImages.firstOrNull()?.uriString ?: "")
+                            .crossfade(true)
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -308,7 +317,10 @@ fun GalleryContent(
         ) {
             // Image Preview (Fill)
             AsyncImage(
-                model = img.uriString,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(img.uriString)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
@@ -405,7 +417,10 @@ fun AlbumCard(title: String, count: Int, previewUri: String?, onClick: () -> Uni
             ) {
                 if (previewUri != null) {
                     AsyncImage(
-                        model = previewUri,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(previewUri)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -465,7 +480,10 @@ fun GalleryItem(
             )
     ) {
         AsyncImage(
-            model = image.uriString,
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(image.uriString)
+                .crossfade(true)
+                .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
