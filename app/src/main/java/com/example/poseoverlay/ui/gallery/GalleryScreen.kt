@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -26,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
@@ -73,7 +73,8 @@ fun GalleryScreen(
         onImageSelect = onImageSelect,
         onDeleteImage = { viewModel.deleteImage(it) },
         onAddClick = { imagePicker.launch(arrayOf("image/*")) },
-        onEditImage = onEditImage
+        onEditImage = onEditImage,
+        onNavigateToDetail = { viewModel.onNavigateToDetail(it.uriString) }
     )
 }
 
@@ -90,6 +91,7 @@ private fun GalleryContent(
     onDeleteImage: (ImageEntity) -> Unit,
     onAddClick: () -> Unit,
     onEditImage: (ImageEntity) -> Unit,
+    onNavigateToDetail: (ImageEntity) -> Unit
 ) {
     var imageToDelete by remember { mutableStateOf<ImageEntity?>(null) }
     var selectedImageForDetail by remember { mutableStateOf<ImageEntity?>(null) }
@@ -211,7 +213,9 @@ private fun GalleryContent(
                     } else {
                         GalleryItem(
                             img,
-                            onClick = { selectedImageForDetail = img },
+                            onClick = {
+                                onNavigateToDetail(img)
+                            },
                             onDelete = { imageToDelete = img },
                             onEdit = { onEditImage(img) },
                             onStart = { onImageSelect(img.uriString) }
@@ -232,13 +236,15 @@ private fun GalleryContent(
             modifier = Modifier.fillMaxSize(),
             color = Color.White
         ) {
-            Column(modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())) {
                 // Header (Banner)
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(folderImages.firstOrNull()?.uriString ?: "")
@@ -248,13 +254,15 @@ private fun GalleryContent(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                    Box(modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f)))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f)))
 
-                    Column(modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(24.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(24.dp)) {
                         Text(currentCat, color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                         Text("${folderImages.size} Items", color = Color.White.copy(alpha = 0.8f))
                     }
@@ -281,15 +289,17 @@ private fun GalleryContent(
                     ) {
                         row.forEach { img ->
                             if (img.uriString == "add") {
-                                Box(modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()) {
                                     AddImageGridItem(onClick = onAddClick)
                                 }
                             } else {
-                                Box(modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()) {
                                     GalleryItem(
                                         img,
                                         onClick = { selectedImageForDetail = img },
@@ -477,7 +487,8 @@ fun GalleryContentEmptyPreview() {
             onImageSelect = {},
             onDeleteImage = {},
             onAddClick = {},
-            onEditImage = {}
+            onEditImage = {},
+            onNavigateToDetail = {}
         )
     }
 }

@@ -13,15 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
+import androidx.navigation.*
 import androidx.navigation.compose.*
-import androidx.navigation.navArgument
 import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
 import com.example.poseoverlay.ui.gallery.*
-import com.example.poseoverlay.ui.gallery.screens.AddImageScreen
-import com.example.poseoverlay.ui.gallery.screens.ImageEditScreen
-import com.example.poseoverlay.ui.gallery.GalleryScreen
+import com.example.poseoverlay.ui.gallery.screens.*
+import com.example.poseoverlay.ui.navigation.NavigationEvent
 import com.example.poseoverlay.ui.navigation.Screen
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 
@@ -51,7 +49,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         database = AppDatabase.getDatabase(applicationContext)
-        repository = ImageRepository(database.imageDao(),database.categoryDao())
+        repository = ImageRepository(database.imageDao(), database.categoryDao())
         viewModelFactory = GalleryViewModelFactory(application, repository)
 
         checkPermission()
@@ -115,6 +113,8 @@ fun MainAppScaffold(
 
     val navController = rememberNavController()
 
+    AppNavigation(viewModel, navController)
+
     NavHost(
         navController = navController,
         startDestination = Screen.Gallery.route
@@ -145,7 +145,7 @@ fun MainAppScaffold(
             )
         ) { backStackEntry ->
             val decoded = Uri.decode(backStackEntry.arguments?.getString(Screen.ImageEdit.argUri))
-            val uri = Uri.parse(decoded)
+            val uri = decoded.toUri()
             val initialCategory = backStackEntry.arguments?.getString(Screen.ImageEdit.argCategory) ?: ""
             val initialDescription = backStackEntry.arguments?.getString(Screen.ImageEdit.argDescription) ?: ""
             val categories by viewModel.categories.collectAsState()
@@ -181,9 +181,45 @@ fun MainAppScaffold(
                 }
             )
         }
+
+        composable(
+            route = Screen.ImageDetail.route,
+            arguments = listOf(navArgument(Screen.ImageDetail.argUrlString) { type = NavType.StringType })
+        ) { backStackEntry ->
+
+            val urlString = backStackEntry.arguments?.getString(Screen.ImageDetail.argUrlString) ?: ""
+
+            LaunchedEffect(urlString) {
+                viewModel.loadDetail(urlString)
+            }
+
+            ImageDetailScreen(viewModel = viewModel)
+
+        }
     }
 }
 
+@Composable
+private fun AppNavigation(viewModel: GalleryViewModel, navController: NavHostController) {
+
+    LaunchedEffect(Unit) {
+        viewModel.navEvent.collect { event ->
+            when (event) {
+                is NavigationEvent.NavigateToImageEdit -> {
+//                    navController.navigate(Screen.ImageDetail.createRoute(event.imageId))
+                }
+
+                is NavigationEvent.NavigateBack -> {
+                    navController.popBackStack()
+                }
+
+                is NavigationEvent.NavigateToDetail ->{
+                    navController.navigate(Screen.ImageDetail.createRoute(event.uriString))
+                }
+            }
+        }
+    }
+}
 
 @Preview(showBackground = true, name = "Main App — Home Tab")
 @Composable

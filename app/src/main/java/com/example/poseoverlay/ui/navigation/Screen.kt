@@ -16,4 +16,9 @@ sealed class Screen(val route: String) {
         fun createRoute(uri: String, category: String, description: String) = 
             "edit?uri=$uri&category=$category&description=$description"
     }
+
+    object ImageDetail : Screen("detail?urlString={urlString}") {
+        const val argUrlString = "urlString"
+        fun createRoute(argUrlString: String) = "detail?urlString=$argUrlString"
+    }
 }
