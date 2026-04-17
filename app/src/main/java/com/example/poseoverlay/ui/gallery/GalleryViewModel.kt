@@ -6,8 +6,8 @@ import android.util.Log
 import androidx.lifecycle.*
 import com.example.poseoverlay.data.ImageEntity
 import com.example.poseoverlay.data.ImageRepository
+import com.example.poseoverlay.ui.common.AppConstants
 import com.example.poseoverlay.ui.navigation.INavigationHandler
-import com.example.poseoverlay.ui.navigation.NavigationEvent
 import com.example.poseoverlay.ui.navigation.NavigationHandler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -18,16 +18,23 @@ class GalleryViewModel(
     private val navHandler: NavigationHandler = NavigationHandler()
 ) : AndroidViewModel(application), INavigationHandler by navHandler {
 
-    private val _selectedCategory = MutableStateFlow("All")
+    private val _onLaunchOverlay = MutableStateFlow("")
+    val onLaunchOverlay = _onLaunchOverlay.asStateFlow()
+
+    private val _selectedCategory = MutableStateFlow(AppConstants.Default_CATEGROY)
     val selectedCategory: StateFlow<String> = _selectedCategory
+
     private val _selectedImage = MutableStateFlow<ImageEntity?>(null)
     val selectedImage = _selectedImage.asStateFlow()
 
     val images = combine(repository.getAllImages(), _selectedCategory) { allImages, category ->
-        if (category == "All") allImages else allImages.filter { it.category == category }
+        if (category ==AppConstants.Default_CATEGROY) allImages else allImages.filter { it.category == category }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val categories = repository.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun loadDetail(uriString: String) {
+    fun findSelectImage(uriString: String) {
+        clearSelectImage()
         viewModelScope.launch {
             // 避免重複加載相同 ID
             if (_selectedImage.value?.uriString == uriString) return@launch
@@ -37,22 +44,27 @@ class GalleryViewModel(
         }
     }
 
-    fun clearDetail() {
+    private fun clearSelectImage() {
         _selectedImage.value = null
     }
 
+    fun onLaunchOverlay(uriString: String) {
+        viewModelScope.launch {
+            _onLaunchOverlay.emit(uriString)
+        }
+    }
 
-
-
-
-
-    val categories = repository.getAllCategories()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun updateImage(image: ImageEntity) {
+        viewModelScope.launch {
+            repository.updateImage(image)
+        }
+    }
 
 
     fun selectCategory(category: String) {
         _selectedCategory.value = category
     }
+
 
     fun addImage(uri: Uri, category: String, tags: String = "", description: String = "") {
         viewModelScope.launch {

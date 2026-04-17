@@ -1,6 +1,7 @@
 package com.example.poseoverlay.ui.gallery.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -10,13 +11,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
-import com.example.poseoverlay.ui.gallery.DetailActionItem
+import com.example.poseoverlay.ui.common.dialogs.DeleteImageDialog
+import com.example.poseoverlay.ui.common.dialogs.InfoImageDialog
 import com.example.poseoverlay.ui.gallery.GalleryViewModel
 
 
@@ -28,13 +31,29 @@ fun ImageDetailScreen(modifier: Modifier = Modifier, viewModel: GalleryViewModel
     ImageDetailContent(
         modifier = modifier,
         selectedImage = selectedImage ?: ImageEntity("", "", "", "", ""),
-        onNavigateBack = { viewModel.onNavigateBack() }
-    )
+        onNavigateBack = { viewModel.onNavigateBack() },
+        onNavigateToImageEdit = { viewModel.onNavigateToImageEdit(it.uriString) },
+        onLaunchOverlay = { viewModel.onLaunchOverlay(it.uriString) },
+        deleteImage = { viewModel.deleteImage(it) },
+
+        )
 }
 
 
 @Composable
-fun ImageDetailContent(modifier: Modifier, selectedImage: ImageEntity, onNavigateBack: () -> Unit) {
+fun ImageDetailContent(
+    modifier: Modifier,
+    selectedImage: ImageEntity,
+    onNavigateBack: () -> Unit,
+    deleteImage: (ImageEntity) -> Unit,
+    onNavigateToImageEdit: (ImageEntity) -> Unit,
+    onLaunchOverlay: (ImageEntity) -> Unit
+) {
+
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -51,7 +70,6 @@ fun ImageDetailContent(modifier: Modifier, selectedImage: ImageEntity, onNavigat
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -63,9 +81,9 @@ fun ImageDetailContent(modifier: Modifier, selectedImage: ImageEntity, onNavigat
             IconButton(onClick = { onNavigateBack() }) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
             }
-//            IconButton(onClick = { showInfoDialog = true }) {
-//                Icon(Icons.Outlined.Info, contentDescription = "Info", tint = Color.White)
-//            }
+            IconButton(onClick = { showInfoDialog = true }) {
+                Icon(Icons.Outlined.Info, contentDescription = "Info", tint = Color.White)
+            }
         }
 
         // Bottom Actions (Based on image1 reference)
@@ -83,19 +101,49 @@ fun ImageDetailContent(modifier: Modifier, selectedImage: ImageEntity, onNavigat
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DetailActionItem(Icons.Outlined.Edit, "Edit") {
-//                    onEditImage(img) // 真正執行 Activity 跳轉
-//                    selectedImageForDetail = null
+                BottomActionItem(Icons.Outlined.Edit, "Edit") {
+                    onNavigateToImageEdit(selectedImage)
                 }
-                DetailActionItem(Icons.Outlined.Delete, "Delete") {
-//                    imageToDelete = img
-//                    selectedImageForDetail = null
+                BottomActionItem(Icons.Outlined.Delete, "Delete") {
+                    showDeleteDialog = true
+
                 }
-                DetailActionItem(Icons.Outlined.PlayArrow, "Start") {
-//                    onImageSelect(img.uriString)
-//                    selectedImageForDetail = null
+                BottomActionItem(Icons.Outlined.PlayArrow, "Start") {
+                    onLaunchOverlay(selectedImage)
                 }
             }
         }
+    }
+
+
+    if (showInfoDialog) {
+        InfoImageDialog(
+            selectedImage = selectedImage,
+            onDismiss = { showInfoDialog = false }
+        )
+    }
+
+
+    if (showDeleteDialog) {
+        DeleteImageDialog(
+            selectedImage = selectedImage,
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                deleteImage(selectedImage)
+                onNavigateBack()
+            }
+        )
+    }
+}
+
+
+@Composable
+fun BottomActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
     }
 }

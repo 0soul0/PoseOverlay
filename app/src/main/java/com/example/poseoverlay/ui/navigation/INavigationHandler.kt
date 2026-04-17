@@ -8,6 +8,8 @@ interface INavigationHandler {
 
     // 定義各種跳轉動作
     fun onNavigateToDetail(uriString: String)
-    fun onNavigateToImageEdit(imageId: String)
+    fun onNavigateToImageEdit(uriString: String)
+
+    fun onNavigateToAlbums(category: String)
     fun onNavigateBack()
 }

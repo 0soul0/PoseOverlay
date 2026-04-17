@@ -1,16 +1,10 @@
 package com.example.poseoverlay.ui.gallery
 
-import android.net.Uri
-import android.util.Log
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,21 +12,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.common.dialogs.DeleteImageDialog
 import com.example.poseoverlay.ui.gallery.components.AddImageGridItem
 import com.example.poseoverlay.ui.gallery.components.GalleryItem
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
-import java.io.File
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Stateful wrapper — owns ViewModel + Activity launchers
@@ -40,63 +32,41 @@ import java.io.File
 @Composable
 fun GalleryScreen(
     viewModel: GalleryViewModel,
-    onAddImage: (Uri) -> Unit,
+    imagePickerLauncher: () -> Unit,
     onEditImage: (ImageEntity) -> Unit,
     onImageSelect: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val images by viewModel.images.collectAsState()
     val categories by viewModel.categories.collectAsState()
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let { contentUri ->
-            try {
-                val tempFile = File(context.cacheDir, "img_preview_${System.currentTimeMillis()}.jpg")
-                context.contentResolver.openInputStream(contentUri)?.use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                val fileUri = Uri.fromFile(tempFile)
-                onAddImage(fileUri)
-            } catch (e: Exception) {
-                Log.e("Gallery", "Failed to copy to cache: ${e.message}", e)
-                onAddImage(contentUri)
-            }
-        }
-    }
 
     GalleryContent(
         images = images,
         categories = categories,
         onImageSelect = onImageSelect,
-        onDeleteImage = { viewModel.deleteImage(it) },
-        onAddClick = { imagePicker.launch(arrayOf("image/*")) },
-        onEditImage = onEditImage,
-        onNavigateToDetail = { viewModel.onNavigateToDetail(it.uriString) }
+        imagePickerLauncher = imagePickerLauncher,
+        onDeleteImage={viewModel.deleteImage(it)},
+        onNavigateToDetail = { viewModel.onNavigateToDetail(it.uriString) },
+        onNavigateToAlbums = { viewModel.onNavigateToAlbums(it) },
+        onNavigateToImageEdit = { viewModel.onNavigateToImageEdit(it.uriString) },
     )
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Pure UI — zero side-effects, fully previewable
-// ═══════════════════════════════════════════════════════════════════════════
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GalleryContent(
     images: List<ImageEntity>,
     categories: List<String>,
     onImageSelect: (String) -> Unit,
+    imagePickerLauncher: () -> Unit,
     onDeleteImage: (ImageEntity) -> Unit,
-    onAddClick: () -> Unit,
-    onEditImage: (ImageEntity) -> Unit,
-    onNavigateToDetail: (ImageEntity) -> Unit
+    onNavigateToDetail: (ImageEntity) -> Unit,
+    onNavigateToAlbums: (String) -> Unit,
+    onNavigateToImageEdit: (ImageEntity) -> Unit,
 ) {
-    var imageToDelete by remember { mutableStateOf<ImageEntity?>(null) }
-    var selectedImageForDetail by remember { mutableStateOf<ImageEntity?>(null) }
-    var inCategoryDetail by remember { mutableStateOf<String?>(null) }
-    var showInfoDialog by remember { mutableStateOf(false) }
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteSelectImage by remember { mutableStateOf<ImageEntity?>(null) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val safeCategories = categories.filter { it.isNotBlank() }
 
@@ -107,36 +77,6 @@ private fun GalleryContent(
         if (gridItems.isNotEmpty()) {
             gridState.animateScrollToItem(index = gridItems.size - 1)
         }
-    }
-
-    // 處理返回鍵邏輯
-    if (inCategoryDetail != null) {
-        BackHandler { inCategoryDetail = null }
-    } else if (selectedImageForDetail != null) {
-        BackHandler { selectedImageForDetail = null }
-    }
-
-    if (imageToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { imageToDelete = null },
-            icon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-            title = { Text("Delete Image") },
-            text = { Text("Remove this image from library?") },
-            confirmButton = {
-                TextButton(
-                    onClick = { imageToDelete?.let { onDeleteImage(it) }; imageToDelete = null },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { imageToDelete = null }) { Text("Cancel") }
-            }
-        )
-    }
-
-    // 如果進入了資料夾詳情，接管返回鍵
-    if (inCategoryDetail != null) {
-        BackHandler { inCategoryDetail = null }
     }
 
     Scaffold(
@@ -189,7 +129,7 @@ private fun GalleryContent(
                             title = cat,
                             count = catImages.size,
                             previewUri = catImages.firstOrNull()?.uriString,
-                            onClick = { inCategoryDetail = cat }
+                            onClick = { onNavigateToAlbums(cat) }
                         )
                     }
                 }
@@ -209,15 +149,18 @@ private fun GalleryContent(
             items(gridItems, key = { it.uriString }) { img ->
                 Box(modifier = Modifier.aspectRatio(1f)) {
                     if (img.uriString == "add") {
-                        AddImageGridItem(onClick = onAddClick)
+                        AddImageGridItem(onClick = imagePickerLauncher)
                     } else {
                         GalleryItem(
                             img,
                             onClick = {
                                 onNavigateToDetail(img)
                             },
-                            onDelete = { imageToDelete = img },
-                            onEdit = { onEditImage(img) },
+                            onDelete = {
+                                showDeleteDialog = true
+                                deleteSelectImage = img
+                            },
+                            onEdit = { onNavigateToImageEdit(img) },
                             onStart = { onImageSelect(img.uriString) }
                         )
                     }
@@ -227,181 +170,17 @@ private fun GalleryContent(
         }
     }
 
-    // Folder Detail (image2 style) — Opens as a "new page" overlay
-    if (inCategoryDetail != null) {
-        val currentCat = inCategoryDetail!!
-        val folderImages = images.filter { it.category == currentCat }
-
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color.White
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())) {
-                // Header (Banner)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(folderImages.firstOrNull()?.uriString ?: "")
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.3f)))
-
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(24.dp)) {
-                        Text(currentCat, color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                        Text("${folderImages.size} Items", color = Color.White.copy(alpha = 0.8f))
-                    }
-
-                    IconButton(
-                        onClick = { inCategoryDetail = null },
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(8.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Back", tint = Color.White)
-                    }
-                }
-
-                // Grid in folder
-                val gridWithAdd = folderImages + ImageEntity("add", "", "", "", "")
-                gridWithAdd.chunked(4).forEach { row ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp)
-                            .padding(horizontal = 2.dp, vertical = 1.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        row.forEach { img ->
-                            if (img.uriString == "add") {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()) {
-                                    AddImageGridItem(onClick = onAddClick)
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()) {
-                                    GalleryItem(
-                                        img,
-                                        onClick = { selectedImageForDetail = img },
-                                        onDelete = { imageToDelete = img },
-                                        onEdit = { onEditImage(img) },
-                                        onStart = { onImageSelect(img.uriString) }
-                                    )
-                                }
-                            }
-                        }
-                        repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
-                    }
-                }
-                Spacer(modifier = Modifier.height(100.dp))
-            }
-        }
-    }
-
-    // Full Screen Detail View
-    if (selectedImageForDetail != null) {
-        val img = selectedImageForDetail!!
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        ) {
-            // Image Preview (Fill)
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(img.uriString)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Top Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { selectedImageForDetail = null }) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-                }
-                IconButton(onClick = { showInfoDialog = true }) {
-                    Icon(Icons.Outlined.Info, contentDescription = "Info", tint = Color.White)
-                }
-            }
-
-            // Bottom Actions (Based on image1 reference)
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
-                color = Color.Black.copy(alpha = 0.7f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(vertical = 12.dp, horizontal = 24.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    DetailActionItem(Icons.Outlined.Edit, "Edit") {
-                        onEditImage(img) // 真正執行 Activity 跳轉
-                        selectedImageForDetail = null
-                    }
-                    DetailActionItem(Icons.Outlined.Delete, "Delete") {
-                        imageToDelete = img
-                        selectedImageForDetail = null
-                    }
-                    DetailActionItem(Icons.Outlined.PlayArrow, "Start") {
-                        onImageSelect(img.uriString)
-                        selectedImageForDetail = null
-                    }
-                }
-            }
-        }
-    }
-
-    if (showInfoDialog && selectedImageForDetail != null) {
-        AlertDialog(
-            onDismissRequest = { showInfoDialog = false },
-            title = { Text("Image Info") },
-            text = {
-                Column {
-                    Text("Category: ${selectedImageForDetail!!.category}", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(selectedImageForDetail!!.description.ifBlank { "No description provided." })
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showInfoDialog = false }) { Text("OK") }
+    if (showDeleteDialog && deleteSelectImage != null) {
+        DeleteImageDialog(
+            selectedImage = deleteSelectImage!!,
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                onDeleteImage(deleteSelectImage!!)
+                deleteSelectImage = null
             }
         )
     }
+
 }
 
 @Composable
@@ -463,20 +242,7 @@ private fun AlbumCard(title: String, count: Int, previewUri: String?, onClick: (
     }
 }
 
-@Composable
-fun DetailActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
-        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
-    }
-}
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Previews — only reference GalleryContent, no real ViewModel needed
-// ═══════════════════════════════════════════════════════════════════════════
 @Preview(showBackground = true, name = "Gallery — Empty")
 @Composable
 fun GalleryContentEmptyPreview() {
@@ -485,10 +251,10 @@ fun GalleryContentEmptyPreview() {
             images = emptyList(),
             categories = listOf("Portrait", "Full Body"),
             onImageSelect = {},
+            imagePickerLauncher = {},
+            onNavigateToDetail = {},
             onDeleteImage = {},
-            onAddClick = {},
-            onEditImage = {},
-            onNavigateToDetail = {}
-        )
+            onNavigateToAlbums = {}
+        ) {}
     }
 }

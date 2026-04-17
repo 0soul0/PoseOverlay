@@ -5,11 +5,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import androidx.activity.compose.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -17,18 +19,18 @@ import androidx.navigation.*
 import androidx.navigation.compose.*
 import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
+import com.example.poseoverlay.ui.common.AppConstants
 import com.example.poseoverlay.ui.gallery.*
 import com.example.poseoverlay.ui.gallery.screens.*
 import com.example.poseoverlay.ui.navigation.NavigationEvent
 import com.example.poseoverlay.ui.navigation.Screen
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
+import kotlinx.coroutines.delay
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class) // For BadgedBox if used, or just suppression
 class MainActivity : ComponentActivity() {
 
-    // ... (Permissions code remains same, omitted for brevity, will include full file on rewrite if needed, but here replacing onCreate logic primarily)
-
-    // Simple state to update UI based on permission status
     private var hasOverlayPermission by mutableStateOf(false)
 
     private val overlayPermissionLauncher = registerForActivityResult(
@@ -113,6 +115,12 @@ fun MainAppScaffold(
 
     val navController = rememberNavController()
 
+    val imagePickerLauncher = rememberImagePickerLauncher(onImageSelected = { uri ->
+        val encodedUri = Uri.encode(uri.toString())
+        navController.navigate(Screen.ImageAdd.createRoute(encodedUri))
+    })
+
+    BindLaunchOverlayFlow(viewModel, onLaunchOverlay)
     AppNavigation(viewModel, navController)
 
     NavHost(
@@ -120,19 +128,13 @@ fun MainAppScaffold(
         startDestination = Screen.Gallery.route
     ) {
         composable(Screen.Gallery.route) {
+            LaunchedEffect(AppConstants.Default_CATEGROY) {
+                viewModel.selectCategory(AppConstants.Default_CATEGROY)
+            }
             GalleryScreen(
                 viewModel = viewModel,
+                imagePickerLauncher = {imagePickerLauncher.launch(arrayOf("image/*"))},
                 onImageSelect = onLaunchOverlay,
-                onEditImage = { img ->
-                    val encodedUri = Uri.encode(img.uriString)
-                    navController.navigate(
-                        Screen.ImageEdit.createRoute(encodedUri, img.category, img.description)
-                    )
-                },
-                onAddImage = { uri ->
-                    val encodedUri = Uri.encode(uri.toString())
-                    navController.navigate(Screen.ImageAdd.createRoute(encodedUri))
-                }
             )
         }
 
@@ -140,27 +142,16 @@ fun MainAppScaffold(
             route = Screen.ImageEdit.route,
             arguments = listOf(
                 navArgument(Screen.ImageEdit.argUri) { type = NavType.StringType },
-                navArgument(Screen.ImageEdit.argCategory) { type = NavType.StringType; defaultValue = "" },
-                navArgument(Screen.ImageEdit.argDescription) { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStackEntry ->
-            val decoded = Uri.decode(backStackEntry.arguments?.getString(Screen.ImageEdit.argUri))
-            val uri = decoded.toUri()
-            val initialCategory = backStackEntry.arguments?.getString(Screen.ImageEdit.argCategory) ?: ""
-            val initialDescription = backStackEntry.arguments?.getString(Screen.ImageEdit.argDescription) ?: ""
-            val categories by viewModel.categories.collectAsState()
+            val uri = backStackEntry.arguments?.getString(Screen.ImageEdit.argUri) ?: ""
+            val decodedUri = Uri.decode(uri)
 
-            ImageEditScreen(
-                uri = uri,
-                initialCategory = initialCategory,
-                initialDescription = initialDescription,
-                existingCategories = categories,
-                onDismiss = { navController.popBackStack() },
-                onConfirm = { cat, desc ->
-                    viewModel.addImage(uri, cat, "", desc)
-                    navController.popBackStack()
-                }
-            )
+            LaunchedEffect(decodedUri) {
+                viewModel.findSelectImage(decodedUri)
+            }
+
+            ImageEditScreen(viewModel = viewModel)
         }
 
         composable(
@@ -188,13 +179,67 @@ fun MainAppScaffold(
         ) { backStackEntry ->
 
             val urlString = backStackEntry.arguments?.getString(Screen.ImageDetail.argUrlString) ?: ""
+            val decodedUri = Uri.decode(urlString)
 
-            LaunchedEffect(urlString) {
-                viewModel.loadDetail(urlString)
+            LaunchedEffect(decodedUri) {
+                viewModel.findSelectImage(decodedUri)
             }
 
             ImageDetailScreen(viewModel = viewModel)
 
+        }
+
+        composable(
+            route = Screen.Albums.route,
+            arguments = listOf(navArgument(Screen.Albums.argCategory) { type = NavType.StringType })
+        ) { backStackEntry ->
+
+            val category = backStackEntry.arguments?.getString(Screen.Albums.argCategory) ?: ""
+
+            LaunchedEffect(category) {
+                viewModel.selectCategory(category)
+            }
+
+            AlbumsScreen(viewModel = viewModel, imagePickerLauncher = {imagePickerLauncher.launch(arrayOf("image/*"))})
+
+        }
+    }
+}
+
+
+@Composable
+private fun rememberImagePickerLauncher(
+    onImageSelected: (Uri) -> Unit
+): ManagedActivityResultLauncher<Array<String>, Uri?> {
+    val context = LocalContext.current
+
+    return rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { contentUri ->
+            try {
+                // 處理檔案 IO
+                val tempFile = File(context.cacheDir, "img_preview_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(contentUri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                onImageSelected(Uri.fromFile(tempFile))
+            } catch (e: Exception) {
+                Log.e("Gallery", "Failed to copy to cache", e)
+                onImageSelected(contentUri)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BindLaunchOverlayFlow(viewModel: GalleryViewModel, onLaunchOverlay: ((String) -> Unit)?) {
+    LaunchedEffect(viewModel) {
+        viewModel.onLaunchOverlay.collect {
+            if (it.isEmpty()) return@collect
+            onLaunchOverlay?.invoke(it)
         }
     }
 }
@@ -206,15 +251,19 @@ private fun AppNavigation(viewModel: GalleryViewModel, navController: NavHostCon
         viewModel.navEvent.collect { event ->
             when (event) {
                 is NavigationEvent.NavigateToImageEdit -> {
-//                    navController.navigate(Screen.ImageDetail.createRoute(event.imageId))
+                    navController.navigate(Screen.ImageEdit.createRoute(event.uriString))
                 }
 
                 is NavigationEvent.NavigateBack -> {
                     navController.popBackStack()
                 }
 
-                is NavigationEvent.NavigateToDetail ->{
+                is NavigationEvent.NavigateToDetail -> {
                     navController.navigate(Screen.ImageDetail.createRoute(event.uriString))
+                }
+
+                is NavigationEvent.NavigateToAlbums ->{
+                    navController.navigate(Screen.Albums.createRoute(event.category))
                 }
             }
         }

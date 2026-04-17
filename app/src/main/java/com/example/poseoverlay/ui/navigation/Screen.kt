@@ -8,17 +8,21 @@ sealed class Screen(val route: String) {
         fun createRoute(uri: String) = "add?uri=$uri"
     }
     
-    object ImageEdit : Screen("edit?uri={uri}&category={category}&description={description}") {
+    object ImageEdit : Screen("edit?uri={uri}") {
         const val argUri = "uri"
-        const val argCategory = "category"
-        const val argDescription = "description"
         
-        fun createRoute(uri: String, category: String, description: String) = 
-            "edit?uri=$uri&category=$category&description=$description"
+        fun createRoute(uri: String) =
+            "edit?uri=$uri"
     }
+
 
     object ImageDetail : Screen("detail?urlString={urlString}") {
         const val argUrlString = "urlString"
         fun createRoute(argUrlString: String) = "detail?urlString=$argUrlString"
+    }
+
+    object Albums : Screen("albums?category={category}") {
+        const val argCategory = "category"
+        fun createRoute(argCategory: String) = "albums?category=$argCategory"
     }
 }

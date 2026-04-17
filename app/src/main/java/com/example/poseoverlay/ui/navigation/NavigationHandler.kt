@@ -21,8 +21,16 @@ class NavigationHandler:INavigationHandler  {
         }
     }
 
-    override fun onNavigateToImageEdit(imageId: String) {
+    override fun onNavigateToImageEdit(uriString: String) {
+        scope.launch {
+            _navEvent.emit(NavigationEvent.NavigateToImageEdit(uriString))
+        }
+    }
 
+    override fun onNavigateToAlbums(category: String) {
+        scope.launch {
+            _navEvent.emit(NavigationEvent.NavigateToAlbums(category))
+        }
     }
 
     override fun onNavigateBack() {

@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.poseoverlay.ui.common.AppConstants
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +61,7 @@ fun AddImageScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        val finalCat = newCategory.ifBlank { "All" }
+                        val finalCat = newCategory.ifBlank { AppConstants.Default_CATEGROY }
                         onConfirm(finalCat, description)
                     }) {
                         Icon(

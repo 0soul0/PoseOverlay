@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.common.AppConstants
 
 class OverlayState {
     var imageUri by mutableStateOf<Uri?>(null)
@@ -17,6 +18,6 @@ class OverlayState {
 
     // In-Overlay Gallery
     var categories by mutableStateOf(listOf<String>())
-    var selectedCategory by mutableStateOf("All")
+    var selectedCategory by mutableStateOf(AppConstants.Default_CATEGROY)
     var images by mutableStateOf(listOf<com.example.poseoverlay.data.ImageEntity>())
 }

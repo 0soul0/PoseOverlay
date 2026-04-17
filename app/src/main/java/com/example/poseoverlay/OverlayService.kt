@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.*
 import androidx.savedstate.*
 import androidx.core.net.toUri
+import com.example.poseoverlay.ui.common.AppConstants
 
 class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
 
@@ -119,7 +120,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         }
         
         // Load initial images
-        loadImages("All")
+        loadImages(AppConstants.Default_CATEGROY)
     }
 
     private var currentImageJob: kotlinx.coroutines.Job? = null
@@ -127,7 +128,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
     private fun loadImages(category: String) {
         currentImageJob?.cancel()
         currentImageJob = serviceScope.launch {
-            val flow = if (category == "All" || category.isBlank()) repository.getAllImages() else repository.getImagesByCategory(category)
+            val flow = if (category == AppConstants.Default_CATEGROY || category.isBlank()) repository.getAllImages() else repository.getImagesByCategory(category)
             flow.collect { list ->
                 overlayState.images = list
             }

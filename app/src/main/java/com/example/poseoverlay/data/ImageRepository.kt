@@ -14,11 +14,6 @@ class ImageRepository(
 
     suspend fun getImageByUri(uri: String): ImageEntity? = imageDao.getImageByUri(uri)
 
-    /**
-     * Merged categories = custom_categories table UNION distinct categories from images,
-     * so the list always includes both "empty" custom categories and any category
-     * that images already belong to.
-     */
     fun getAllCategories(): Flow<List<String>> =
         combine(
             categoryDao.getAllCustomCategories(),
@@ -32,7 +27,7 @@ class ImageRepository(
         imageDao.insertImage(
             ImageEntity(
                 uriString = uri,
-                name = "", // Or extract name from URI if needed
+                name = "",
                 category = category,
                 tags = tags,
                 description = description
@@ -40,6 +35,11 @@ class ImageRepository(
         )
         // Auto-register the category so it survives even if all images are deleted
         categoryDao.insertCategory(CategoryEntity(category))
+    }
+
+
+    suspend fun updateImage(image: ImageEntity) {
+        imageDao.updateImage(image)
     }
 
     suspend fun deleteImage(image: ImageEntity) {

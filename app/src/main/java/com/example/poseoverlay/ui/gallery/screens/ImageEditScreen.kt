@@ -1,7 +1,6 @@
 package com.example.poseoverlay.ui.gallery.screens
 
 import android.net.Uri
-import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,22 +11,43 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.gallery.GalleryViewModel
+
+@Composable
+fun ImageEditScreen(modifier: Modifier = Modifier, viewModel: GalleryViewModel) {
+
+    val selectedImage by viewModel.selectedImage.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    ImageEditContent(
+        modifier = modifier,
+        selectedImage = selectedImage ?: ImageEntity("", "", "", "", ""),
+        existingCategories = categories,
+        onNavigateBack = { viewModel.onNavigateBack() },
+        onConfirm = { image ->
+            viewModel.updateImage(image)
+            viewModel.onNavigateBack()
+        }
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ImageEditScreen(
-    uri: Uri,
-    initialCategory: String,
-    initialDescription: String,
+private fun ImageEditContent(
+    modifier: Modifier,
     existingCategories: List<String>,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit
+    selectedImage: ImageEntity,
+    onNavigateBack: () -> Unit, onConfirm: (ImageEntity) -> Unit,
 ) {
-    var category by remember { mutableStateOf(initialCategory) }
-    var description by remember { mutableStateOf(initialDescription) }
+
+    var category by remember(selectedImage) { mutableStateOf(selectedImage.category) }
+    var description by remember(selectedImage) { mutableStateOf(selectedImage.description) }
     var expanded by remember { mutableStateOf(false) }
 
     // Style constants (Light Theme matching AddImageActivity)
@@ -35,19 +55,19 @@ fun ImageEditScreen(
     val surfaceColor = Color(0xFFF5F5F7)
     val accentColor = Color(0xFF007AFF)
     val textColor = Color.Black
-    Log.d("TAGTAGTAGTAG", "ImageEditScreens: ")
-    Log.d("TAGTAGTAGTAG", "ImageEditScreen: "+uri)
+
     Scaffold(
+        modifier = modifier,
         containerColor = backgroundColor,
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Edit Pose", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = accentColor) }
+                    TextButton(onClick = { onNavigateBack() }) { Text("Cancel", color = accentColor) }
                 },
                 actions = {
                     Button(
-                        onClick = { onConfirm(category, description) },
+                        onClick = { onConfirm(selectedImage.copy(category = category, description = description)) },
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
                         Text("Save")
@@ -65,7 +85,7 @@ fun ImageEditScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Image Preview
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -74,7 +94,7 @@ fun ImageEditScreen(
                     .background(surfaceColor)
             ) {
                 AsyncImage(
-                    model = uri,
+                    model = selectedImage.uriString,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
