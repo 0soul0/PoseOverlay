@@ -25,7 +25,6 @@ import com.example.poseoverlay.ui.gallery.screens.*
 import com.example.poseoverlay.ui.navigation.NavigationEvent
 import com.example.poseoverlay.ui.navigation.Screen
 import com.example.poseoverlay.ui.theme.PoseOverlayTheme
-import kotlinx.coroutines.delay
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class) // For BadgedBox if used, or just suppression
@@ -133,7 +132,7 @@ fun MainAppScaffold(
             }
             GalleryScreen(
                 viewModel = viewModel,
-                imagePickerLauncher = {imagePickerLauncher.launch(arrayOf("image/*"))},
+                imagePickerLauncher = { imagePickerLauncher.launch(arrayOf("image/*")) },
                 onImageSelect = onLaunchOverlay,
             )
         }
@@ -151,7 +150,7 @@ fun MainAppScaffold(
                 viewModel.findSelectImage(decodedUri)
             }
 
-            ImageEditScreen(viewModel = viewModel)
+            ImageEditOrAddScreen(viewModel = viewModel)
         }
 
         composable(
@@ -160,16 +159,11 @@ fun MainAppScaffold(
         ) { backStackEntry ->
             val decoded = Uri.decode(backStackEntry.arguments?.getString(Screen.ImageAdd.argUri))
             val uri = decoded.toUri()
-            val categories by viewModel.categories.collectAsState()
 
-            AddImageScreen(
+
+            ImageEditOrAddScreen(
+                viewModel = viewModel,
                 uri = uri,
-                categories = categories,
-                onDismiss = { navController.popBackStack() },
-                onConfirm = { cat, desc ->
-                    viewModel.addImage(uri, cat, "", desc)
-                    navController.popBackStack()
-                }
             )
         }
 
@@ -200,7 +194,7 @@ fun MainAppScaffold(
                 viewModel.selectCategory(category)
             }
 
-            AlbumsScreen(viewModel = viewModel, imagePickerLauncher = {imagePickerLauncher.launch(arrayOf("image/*"))})
+            AlbumsScreen(viewModel = viewModel, imagePickerLauncher = { imagePickerLauncher.launch(arrayOf("image/*")) })
 
         }
     }
@@ -262,7 +256,7 @@ private fun AppNavigation(viewModel: GalleryViewModel, navController: NavHostCon
                     navController.navigate(Screen.ImageDetail.createRoute(event.uriString))
                 }
 
-                is NavigationEvent.NavigateToAlbums ->{
+                is NavigationEvent.NavigateToAlbums -> {
                     navController.navigate(Screen.Albums.createRoute(event.category))
                 }
             }

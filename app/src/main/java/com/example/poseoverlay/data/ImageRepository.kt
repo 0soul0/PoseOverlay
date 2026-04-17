@@ -23,18 +23,10 @@ class ImageRepository(
             if (merged.isEmpty()) listOf("Recent") else merged
         }
 
-    suspend fun insertImage(uri: String, category: String, tags: String = "", description: String = "") {
-        imageDao.insertImage(
-            ImageEntity(
-                uriString = uri,
-                name = "",
-                category = category,
-                tags = tags,
-                description = description
-            )
-        )
+    suspend fun insertImage(image:ImageEntity) {
+        imageDao.insertImage(image)
         // Auto-register the category so it survives even if all images are deleted
-        categoryDao.insertCategory(CategoryEntity(category))
+        categoryDao.insertCategory(CategoryEntity(image.category))
     }
 
 

@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,27 +14,53 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.common.AppConstants
 import com.example.poseoverlay.ui.gallery.GalleryViewModel
 
-@Composable
-fun ImageEditScreen(modifier: Modifier = Modifier, viewModel: GalleryViewModel) {
+const val TYPE_EDIT = "Edit"
+const val TYPE_ADD = "Add"
 
-    val selectedImage by viewModel.selectedImage.collectAsState()
+@Composable
+fun ImageEditOrAddScreen(
+    modifier: Modifier = Modifier,
+    viewModel: GalleryViewModel,
+    uri: Uri? = null
+) {
+
+    val type = if (uri == null) {
+        TYPE_EDIT
+    } else {
+        TYPE_ADD
+    }
+
     val categories by viewModel.categories.collectAsState()
+
+    val collectedImage by viewModel.selectedImage.collectAsState()
+
+// 2. 根據類型決定最終顯示的實體
+    val selectedImage = if (type == TYPE_EDIT) {
+        collectedImage ?: ImageEntity("", "", "", "", "") // 如果是 null 則給空物件
+    } else {
+        val selectedCategory by viewModel.selectedCategory.collectAsState()
+        ImageEntity(uri.toString(), "", selectedCategory, "", "")
+    }
+
+
     ImageEditContent(
         modifier = modifier,
-        selectedImage = selectedImage ?: ImageEntity("", "", "", "", ""),
+        type = type,
+        selectedImage = selectedImage,
         existingCategories = categories,
         onNavigateBack = { viewModel.onNavigateBack() },
         onConfirm = { image ->
-            viewModel.updateImage(image)
+            if (type == TYPE_EDIT) {
+                viewModel.updateImage(image)
+            } else {
+                uri?.let { viewModel.addImage(image) }
+            }
             viewModel.onNavigateBack()
         }
     )
@@ -41,16 +70,25 @@ fun ImageEditScreen(modifier: Modifier = Modifier, viewModel: GalleryViewModel) 
 @Composable
 private fun ImageEditContent(
     modifier: Modifier,
+    type: String,
     existingCategories: List<String>,
     selectedImage: ImageEntity,
     onNavigateBack: () -> Unit, onConfirm: (ImageEntity) -> Unit,
 ) {
 
-    var category by remember(selectedImage) { mutableStateOf(selectedImage.category) }
+
+    var category by remember(selectedImage) {
+        mutableStateOf(
+            if (selectedImage.category == AppConstants.Default_CATEGROY) {
+                ""
+            } else {
+                selectedImage.category
+            })
+    }
     var description by remember(selectedImage) { mutableStateOf(selectedImage.description) }
     var expanded by remember { mutableStateOf(false) }
 
-    // Style constants (Light Theme matching AddImageActivity)
+
     val backgroundColor = Color.White
     val surfaceColor = Color(0xFFF5F5F7)
     val accentColor = Color(0xFF007AFF)
@@ -60,20 +98,31 @@ private fun ImageEditContent(
         modifier = modifier,
         containerColor = backgroundColor,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Edit Pose", fontWeight = FontWeight.Bold) },
+            TopAppBar(
+                title = { Text(type, color = textColor) },
                 navigationIcon = {
-                    TextButton(onClick = { onNavigateBack() }) { Text("Cancel", color = accentColor) }
-                },
-                actions = {
-                    Button(
-                        onClick = { onConfirm(selectedImage.copy(category = category, description = description)) },
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
-                    ) {
-                        Text("Save")
+                    IconButton(onClick = { onNavigateBack() }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = textColor
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = backgroundColor)
+                actions = {
+                    IconButton(onClick = {
+                        onConfirm(selectedImage.copy(category = category.ifBlank { AppConstants.Default_CATEGROY }, description = description))
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Save",
+                            tint = accentColor
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = backgroundColor
+                )
             )
         }
     ) { padding ->

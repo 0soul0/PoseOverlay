@@ -3,6 +3,7 @@ package com.example.poseoverlay.ui.gallery
 import android.app.Application
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.lifecycle.*
 import com.example.poseoverlay.data.ImageEntity
 import com.example.poseoverlay.data.ImageRepository
@@ -60,15 +61,15 @@ class GalleryViewModel(
         }
     }
 
-
     fun selectCategory(category: String) {
         _selectedCategory.value = category
     }
 
 
-    fun addImage(uri: Uri, category: String, tags: String = "", description: String = "") {
+    fun addImage(image: ImageEntity) {
         viewModelScope.launch {
             try {
+                val uri = image.uriString.toUri()
                 val context = getApplication<Application>()
                 val fileName = "img_${System.currentTimeMillis()}.jpg"
                 val destFile = java.io.File(context.filesDir, fileName)
@@ -83,7 +84,7 @@ class GalleryViewModel(
                     destFile.outputStream().use { output -> input.copyTo(output) }
                 }
 
-                repository.insertImage(Uri.fromFile(destFile).toString(), category, tags, description)
+                repository.insertImage(image)
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Failed to save image: ${e.message}", e)
             }

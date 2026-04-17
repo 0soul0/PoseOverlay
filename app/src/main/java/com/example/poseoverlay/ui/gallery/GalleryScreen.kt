@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.ui.common.AppConstants
 import com.example.poseoverlay.ui.common.dialogs.DeleteImageDialog
 import com.example.poseoverlay.ui.gallery.components.AddImageGridItem
 import com.example.poseoverlay.ui.gallery.components.GalleryItem
@@ -33,18 +34,18 @@ import com.example.poseoverlay.ui.theme.PoseOverlayTheme
 fun GalleryScreen(
     viewModel: GalleryViewModel,
     imagePickerLauncher: () -> Unit,
-    onEditImage: (ImageEntity) -> Unit,
     onImageSelect: (String) -> Unit
 ) {
     val images by viewModel.images.collectAsState()
     val categories by viewModel.categories.collectAsState()
+    val filterCategories = categories.filter { it != AppConstants.Default_CATEGROY }
 
     GalleryContent(
         images = images,
-        categories = categories,
+        categories = filterCategories,
         onImageSelect = onImageSelect,
         imagePickerLauncher = imagePickerLauncher,
-        onDeleteImage={viewModel.deleteImage(it)},
+        onDeleteImage = { viewModel.deleteImage(it) },
         onNavigateToDetail = { viewModel.onNavigateToDetail(it.uriString) },
         onNavigateToAlbums = { viewModel.onNavigateToAlbums(it) },
         onNavigateToImageEdit = { viewModel.onNavigateToImageEdit(it.uriString) },
