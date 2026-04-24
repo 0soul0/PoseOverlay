@@ -7,10 +7,10 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.PixelFormat
 import android.graphics.Region
-import android.net.Uri
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -23,6 +23,7 @@ import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
 import com.example.poseoverlay.feature.overlay.ui.OverlayComposeView
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 import java.lang.reflect.Proxy
 
 class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -38,13 +39,9 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: ComposeView
     private lateinit var params: WindowManager.LayoutParams
-
-    // State holder
     private val overlayState = OverlayState()
 
 
-
-    // Dependencies
     private lateinit var repository: ImageRepository
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
@@ -73,30 +70,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
             setContent {
                 OverlayComposeView(
                     state = overlayState,
-
-                    onToggleTouch = { enabled -> toggleTouchability(enabled) },
-                    onMinimize = { toggleMinimize(true) },
-                    onMaximize = { toggleMinimize(false) },
-                    onClose = { stopSelf() },
-                    onOpenGallery = {
-                        // Launch MainActivity to pick image
-                        val intent = Intent(this@OverlayService, MainActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(intent)
-                    },
-                    onMove = { dx, dy ->
-                        if (overlayState.isMinimized) {
-                            moveWindow(dx, dy)
-                        }
-                    },
-                    onCategorySelect = { cat -> loadImages(cat) },
-                    onImageSelect = { uri ->
-                        overlayState.imageUri = uri.uriString.toUri()
-                        serviceScope.launch {
-                            overlayState.noteText = uri.description
-                        }
-                    }
+                    event = bindEvent()
                 )
             }
         }
@@ -160,23 +134,57 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         }
     }
 
-    private fun moveWindow(dx: Float, dy: Float) {
-        params.x += dx.toInt()
-        params.y += dy.toInt()
-        windowManager.updateViewLayout(overlayView, params)
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        when (intent?.action) {
+            ACTION_UNLOCK -> {
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(1, createNotification(includeUnlockAction = false))
+            }
+
+            ACTION_SET_IMAGE -> {
+                val uriString = intent.getStringExtra(EXTRA_IMAGE_URI)
+                if (uriString != null) {
+                    overlayState.imageUri = uriString.toUri()
+                    serviceScope.launch {
+                        val imageEntity = repository.getImageByUri(uriString)
+                        overlayState.noteText = imageEntity?.description ?: ""
+                    }
+                }
+            }
+        }
+        return START_STICKY
     }
 
-    private fun toggleMinimize(minimize: Boolean) {
-        overlayState.isMinimized = minimize
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::overlayView.isInitialized) {
+            windowManager.removeView(overlayView)
+        }
+    }
 
-        // 為了支援全螢幕透傳，我們現在統一使用 MATCH_PARENT
-        // 由 OnComputeInternalInsetsListener 決定哪個局部區域可點擊
-        params.width = WindowManager.LayoutParams.MATCH_PARENT
-        params.height = WindowManager.LayoutParams.MATCH_PARENT
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = 0
-        params.y = 0
+    private fun bindEvent(): (OverlayEvent) -> Unit {
+        return { it: OverlayEvent ->
+            when (it) {
+                OverlayEvent.onNavigateToGallery -> {
+                    val intent = Intent(this@OverlayService, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    stopSelf()
+                    startActivity(intent)
+                }
 
+                is OverlayEvent.toggleLock -> toggleLock(it.isLocked)
+
+                OverlayEvent.Close -> {
+                    stopSelf()
+                }
+            }
+        }
+    }
+
+    private fun toggleLock(isLocked: Boolean) {
+        overlayState.isLocked = isLocked
         windowManager.updateViewLayout(overlayView, params)
     }
 
@@ -196,17 +204,11 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
                     val touchableRegionField = insets.javaClass.getField("touchableRegion")
                     val region = touchableRegionField.get(insets) as Region
 
-                    if (overlayState.isLocked) {
-                        // 鎖定狀態：完全不接收任何觸摸，所有點擊穿透到背景
-                        setTouchableInsets.invoke(insets, 3) // TOUCHABLE_INSETS_REGION
-                        region.setEmpty()
-                    } else {
-                        // 非鎖定：只有有註冊區域的地方才接收觸摸
-                        setTouchableInsets.invoke(insets, 3)
-                        region.setEmpty()
-                        overlayState.interactiveBounds.values.forEach { rect ->
-                            region.union(rect)
-                        }
+                    // 統一使用 Region 模式，由 UI 組件決定哪些地方可點擊
+                    setTouchableInsets.invoke(insets, 3) // TOUCHABLE_INSETS_REGION
+                    region.setEmpty()
+                    overlayState.interactiveBounds.values.forEach { rect ->
+                        region.union(rect)
                     }
                 }
                 null
@@ -215,53 +217,6 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    /**
-     * Toggles touchability.
-     */
-    private fun toggleTouchability(enabled: Boolean) {
-        if (enabled) {
-            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-        } else {
-            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        }
-        windowManager.updateViewLayout(overlayView, params)
-
-        if (!enabled) {
-            val notification = createNotification(includeUnlockAction = true)
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.notify(1, notification)
-        }
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
-        when (intent?.action) {
-            ACTION_UNLOCK -> {
-                toggleTouchability(true)
-                overlayState.isLocked = false
-                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(1, createNotification(includeUnlockAction = false))
-            }
-
-            ACTION_SET_IMAGE -> {
-                val uriString = intent.getStringExtra(EXTRA_IMAGE_URI)
-                if (uriString != null) {
-                    overlayState.imageUri = Uri.parse(uriString)
-                    // Auto-maximize when a new image is selected
-                    if (overlayState.isMinimized) {
-                        toggleMinimize(false)
-                    }
-
-                    serviceScope.launch {
-                        val imageEntity = repository.getImageByUri(uriString)
-                        overlayState.noteText = imageEntity?.description ?: ""
-                    }
-                }
-            }
-        }
-        return START_STICKY
     }
 
     private fun createNotificationChannel() {
@@ -298,17 +253,9 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         return builder.build()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::overlayView.isInitialized) {
-            windowManager.removeView(overlayView)
-        }
-    }
-
     companion object {
         const val CHANNEL_ID = "overlay_channel"
         const val ACTION_UNLOCK = "com.example.poseoverlay.ACTION_UNLOCK"
-        const val ACTION_PICK_IMAGE = "com.example.poseoverlay.ACTION_PICK_IMAGE"
         const val ACTION_SET_IMAGE = "com.example.poseoverlay.ACTION_SET_IMAGE"
         const val EXTRA_IMAGE_URI = "extra_image_uri"
     }

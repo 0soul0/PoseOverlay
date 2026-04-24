@@ -1,14 +1,12 @@
 package com.example.poseoverlay.feature.overlay.ui
 
 import android.graphics.Rect
-import android.graphics.drawable.ColorDrawable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,6 +15,7 @@ import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -24,17 +23,17 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.TransformOrigin.Companion.Center
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.*
-import java.util.*
-import kotlin.math.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.poseoverlay.data.ImageEntity
+import com.example.poseoverlay.feature.overlay.OverlayEvent
 import com.example.poseoverlay.feature.overlay.OverlayState
 import kotlinx.coroutines.delay
+import java.util.*
+import kotlin.math.*
 
 // 擴充方法：用於向 state 回報組件位置
 fun Modifier.reportBounds(state: OverlayState, key: String): Modifier = this.onGloballyPositioned { coords ->
@@ -50,14 +49,7 @@ fun Modifier.reportBounds(state: OverlayState, key: String): Modifier = this.onG
 @Composable
 fun OverlayComposeView(
     state: OverlayState,
-    onToggleTouch: (Boolean) -> Unit,
-    onMinimize: () -> Unit,
-    onMaximize: () -> Unit,
-    onClose: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onMove: (Float, Float) -> Unit,
-    onCategorySelect: (String) -> Unit,
-    onImageSelect: (ImageEntity) -> Unit,
+    event: (OverlayEvent) -> Unit
 ) {
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -65,7 +57,7 @@ fun OverlayComposeView(
         TransformableImage(state = state)
         VerticalSidebar(
             state = state,
-            onMaximize = onMaximize,
+            event = event,
             modifier = Modifier.align(
                 BiasAlignment(horizontalBias = 1f, verticalBias = -0.6f) // 關鍵：自定義對齊比例
             )
@@ -77,7 +69,7 @@ fun OverlayComposeView(
 @Composable
 fun VerticalSidebar(
     state: OverlayState,
-    onMaximize: () -> Unit,
+    event: (OverlayEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -267,7 +259,10 @@ fun VerticalSidebar(
                         }
                         IconButton(
                             onClick = {
-
+                                if (!isHidden) {
+                                    event(OverlayEvent.toggleLock(!state.isLocked))
+                                    resetTimer()
+                                }
                             },
                             modifier = Modifier.weight(1f)) {
                             Icon(if (state.isLocked) Icons.Outlined.LockClock else Icons.Outlined.LockOpen, "Lock", tint = Color.White)
@@ -275,7 +270,7 @@ fun VerticalSidebar(
                         IconButton(
                             onClick = {
                                 if (!isHidden) {
-                                    onMaximize()
+                                    event(OverlayEvent.onNavigateToGallery)
                                     resetTimer()
                                 }
                             },
@@ -313,7 +308,6 @@ fun TransformableImage(state: OverlayState) {
         offset = Offset.Zero
         isSelected = false
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -416,38 +410,21 @@ fun TransformableImage(state: OverlayState) {
                                     if (state.isLocked) return@pointerInput
                                     detectDragGestures { change, dragAmount ->
                                         change.consume()
-
                                         val biasAlignment = alignment as? BiasAlignment
                                         val horizontalFactor = biasAlignment?.horizontalBias ?: 0f
                                         val verticalFactor = biasAlignment?.verticalBias ?: 0f
-
                                         if (horizontalFactor == 0f && verticalFactor == 0f) return@detectDragGestures
-
-                                        // Compose 的 dragAmount 已經是局部座標系（已考慮旋轉），但尚未考慮縮放倍率
-                                        // 為了讓視覺縮放速度等於手指移動速度，需補償當前的縮放值
                                         val localDragX = dragAmount.x * scaleX
                                         val localDragY = dragAmount.y * scaleY
-
-                                        // 計算 Scale 增量
-                                        val deltaScaleX = if (horizontalFactor != 0f) {
-                                            (localDragX * horizontalFactor) / imageSize.width
-                                        } else 0f
-                                        val deltaScaleY = if (verticalFactor != 0f) {
-                                            (localDragY * verticalFactor) / imageSize.height
-                                        } else 0f
-
-                                        // 計算局部座標系下的 Offset 位移量 (為了固定對向邊)
+                                        val deltaScaleX = if (horizontalFactor != 0f) (localDragX * horizontalFactor) / imageSize.width else 0f
+                                        val deltaScaleY = if (verticalFactor != 0f) (localDragY * verticalFactor) / imageSize.height else 0f
                                         val localOffsetX = (imageSize.width * deltaScaleX / 2f) * horizontalFactor
                                         val localOffsetY = (imageSize.height * deltaScaleY / 2f) * verticalFactor
-
-                                        // 將局部 Offset 位移旋轉回螢幕座標系 (+rotation) 以套用到外部 Offset
                                         val rotationRad = rotation * (PI.toFloat() / 180f)
                                         val cosR = cos(rotationRad)
                                         val sinR = sin(rotationRad)
                                         val screenOffsetX = localOffsetX * cosR - localOffsetY * sinR
                                         val screenOffsetY = localOffsetX * sinR + localOffsetY * cosR
-
-                                        // 套用更新
                                         scaleX = (scaleX + deltaScaleX).coerceAtLeast(0.01f)
                                         scaleY = (scaleY + deltaScaleY).coerceAtLeast(0.01f)
                                         offset += Offset(screenOffsetX, screenOffsetY)
@@ -473,227 +450,8 @@ fun VerticalSidebarPreview() {
                 isMinimized = true
                 imageUri = "".toUri()
             },
-            onToggleTouch = {},
-            onMinimize = {},
-            onMaximize = {},
-            onClose = {},
-            onOpenGallery = {},
-            onMove = { _, _ -> },
-            onCategorySelect = {},
-            onImageSelect = {},
+            event = {}
         )
-
-
-//        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-//            VerticalSidebar(
-//                state = OverlayState().apply {
-//                    alpha = 0.7f
-//                    isVisible = true
-//                    isMinimized = true
-//                },
-//                onMaximize = {}
-//            )
-//        }
-    }
-}
-
-
-
-
-@Composable
-fun ExpandableControlPanel(
-    modifier: Modifier = Modifier,
-    state: OverlayState,
-    onAlphaChange: (Float) -> Unit,
-    onLockToggle: () -> Unit,
-    onMinimize: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onNoteToggle: () -> Unit,
-    onClose: () -> Unit,
-    onCategorySelect: (String) -> Unit,
-    onImageSelect: (ImageEntity) -> Unit
-) {
-    var expanded by remember { mutableStateOf(true) }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .background(Color.Black.copy(alpha = 0.7f))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (expanded) {
-            // Expanded View
-
-            // Categories
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-            ) {
-                items(state.categories.size) { index ->
-                    val cat = state.categories[index]
-                    FilterChip(
-                        selected = state.selectedCategory == cat,
-                        onClick = { onCategorySelect(cat) },
-                        label = { Text(cat, color = if (state.selectedCategory == cat) Color.Black else Color.White) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = Color.White,
-                            containerColor = Color.White.copy(alpha = 0.2f),
-                            labelColor = Color.White
-                        ),
-                        border = null
-                    )
-                }
-            }
-
-            // Images
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                items(state.images.size) { index ->
-                    val img = state.images[index]
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(img.uriString)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Gray)
-                            .clickable { onImageSelect(img) },
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-
-            // Controls Row (Similar to original but cleaner)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    IconButton(onClick = onOpenGallery) { Icon(Icons.Default.Image, "Gallery", tint = Color.White) }
-                    IconButton(onClick = onNoteToggle) { Icon(Icons.Default.Edit, "Note", tint = Color.White) }
-                    IconButton(onClick = onLockToggle) { Icon(Icons.Outlined.LockOpen, "Lock", tint = Color.White) }
-                    IconButton(onClick = onMinimize) { Icon(Icons.Default.KeyboardArrowDown, "Minimize", tint = Color.White) }
-                }
-
-                IconButton(
-                    onClick = { onClose() },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f), CircleShape)
-                ) {
-                    Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.error)
-                }
-            }
-
-            Spacer(modifier = Modifier.size(16.dp))
-
-            // Collapse Button
-            IconButton(
-                onClick = { expanded = false },
-                modifier = Modifier.background(Color.White.copy(alpha = 0.2f), CircleShape)
-            ) {
-                Icon(Icons.Default.KeyboardArrowDown, "Collapse", tint = Color.White)
-            }
-
-        } else {
-            // Collapsed View: Slider + Expand Button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Alpha Slider (Taking most space)
-                Slider(
-                    value = state.alpha,
-                    onValueChange = onAlphaChange,
-                    valueRange = 0.1f..1f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = Color.White.copy(0.3f)
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Expand Button
-                IconButton(
-                    onClick = { expanded = true },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
-                ) {
-                    Icon(
-                        Icons.Default.Menu,
-                        contentDescription = "Expand",
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun OverlayContentLayout(
-    state: OverlayState,
-    onToggleTouch: (Boolean) -> Unit,
-    onMinimize: () -> Unit,
-    onClose: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onCategorySelect: (String) -> Unit,
-    onImageSelect: (ImageEntity) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (state.isNoteVisible) {
-            NoteBox(
-                text = state.noteText,
-                onTextChange = { state.noteText = it },
-                onClose = { state.isNoteVisible = false },
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .onGloballyPositioned { coords ->
-                        val rect = coords.boundsInWindow()
-                        state.interactiveBounds = state.interactiveBounds +
-                                ("note" to Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt()))
-                    }
-            )
-        }
-
-        if (!state.isLocked) {
-            ExpandableControlPanel(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
-                    .onGloballyPositioned { coords ->
-                        val rect = coords.boundsInWindow()
-                        state.interactiveBounds = state.interactiveBounds +
-                                ("panel" to Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt()))
-                    },
-                state = state,
-                onAlphaChange = { state.alpha = it },
-                onLockToggle = {
-                    val newLockState = !state.isLocked
-                    state.isLocked = newLockState
-                    onToggleTouch(!newLockState)
-                },
-                onMinimize = onMinimize,
-                onOpenGallery = onOpenGallery,
-                onNoteToggle = { state.isNoteVisible = !state.isNoteVisible },
-                onClose = onClose,
-                onCategorySelect = onCategorySelect,
-                onImageSelect = onImageSelect
-            )
-        }
     }
 }
 
@@ -743,55 +501,6 @@ fun NoteBox(
     }
 }
 
-
-@Preview(showBackground = true)
-@Composable
-fun ExpandableControlPanelCollapsedPreview() {
-    MaterialTheme {
-        Box(
-            modifier = Modifier
-                .padding(20.dp)
-                .background(Color.DarkGray)) {
-            ExpandableControlPanel(
-                state = OverlayState().apply { alpha = 0.5f },
-                onAlphaChange = {},
-                onLockToggle = {},
-                onMinimize = {},
-                onOpenGallery = {},
-                onNoteToggle = {},
-                onClose = {},
-                onCategorySelect = {},
-                onImageSelect = {}
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ExpandableControlPanelExpandedPreview() {
-    MaterialTheme {
-        Box(
-            modifier = Modifier
-                .padding(20.dp)
-                .background(Color.DarkGray)) {
-            ExpandableControlPanel(
-                state = OverlayState().apply {
-                    categories = listOf("All", "Portrait", "Hand")
-                    alpha = 0.7f
-                },
-                onAlphaChange = {},
-                onLockToggle = {},
-                onMinimize = {},
-                onOpenGallery = {},
-                onNoteToggle = {},
-                onClose = {},
-                onCategorySelect = {},
-                onImageSelect = {}
-            )
-        }
-    }
-}
 
 @Preview(showBackground = true)
 @Composable

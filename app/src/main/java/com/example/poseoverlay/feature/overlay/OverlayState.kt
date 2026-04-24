@@ -16,7 +16,6 @@ class OverlayState {
     var isLocked by mutableStateOf(false)
     var noteText by mutableStateOf("")
     var isVisible by mutableStateOf(true)
-    var isNoteVisible by mutableStateOf(false)
 
     // In-Overlay Gallery
     var categories by mutableStateOf(listOf<String>())
