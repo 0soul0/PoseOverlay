@@ -3,7 +3,8 @@ package com.example.poseoverlay.feature.overlay.ui
 import android.graphics.Rect
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -15,7 +16,6 @@ import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -32,7 +32,6 @@ import coil.request.ImageRequest
 import com.example.poseoverlay.feature.overlay.OverlayEvent
 import com.example.poseoverlay.feature.overlay.OverlayState
 import kotlinx.coroutines.delay
-import java.util.*
 import kotlin.math.*
 
 // 擴充方法：用於向 state 回報組件位置
@@ -42,7 +41,7 @@ fun Modifier.reportBounds(state: OverlayState, key: String): Modifier = this.onG
 
     // 只有當位置真的改變或不在 map 裡才更新，避免過度 Recompose
     if (state.interactiveBounds[key] != androidRect) {
-        state.interactiveBounds = state.interactiveBounds + (key to androidRect)
+        state.interactiveBounds.put(key, androidRect)
     }
 }
 
@@ -270,7 +269,7 @@ fun VerticalSidebar(
                         IconButton(
                             onClick = {
                                 if (!isHidden) {
-                                    event(OverlayEvent.onNavigateToGallery)
+                                    state.isLocked = !state.isLocked
                                     resetTimer()
                                 }
                             },
@@ -328,11 +327,11 @@ fun TransformableImage(state: OverlayState) {
                     )
                     .onGloballyPositioned { coords ->
                         imageSize = coords.size
-                        // 更新互動區域，讓系統知道這裡不可點透 (如果需要的話)
                         val rect = coords.boundsInWindow()
-                        state.interactiveBounds = state.interactiveBounds + ("image" to Rect(
-                            rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt()
-                        ))
+                        state.interactiveBounds.put(
+                            "image", Rect(
+                                rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt()
+                            ))
                     }
                     .pointerInput(state.isLocked) {
                         if (state.isLocked) return@pointerInput
@@ -346,7 +345,7 @@ fun TransformableImage(state: OverlayState) {
                     .pointerInput(state.isLocked) {
                         if (state.isLocked) return@pointerInput
                         detectTapGestures(
-                            onPress = {isSelected = true},
+                            onPress = { isSelected = true },
                             onDoubleTap = {
                                 scaleX = 1f
                                 scaleY = 1f

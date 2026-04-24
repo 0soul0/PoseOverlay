@@ -185,7 +185,10 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
 
     private fun toggleLock(isLocked: Boolean) {
         overlayState.isLocked = isLocked
-        windowManager.updateViewLayout(overlayView, params)
+        // 立即觸發 WindowManager 更新，這會讓 setupTouchPassthrough 重新執行
+        if (::overlayView.isInitialized) {
+            windowManager.updateViewLayout(overlayView, params)
+        }
     }
 
     private fun setupTouchPassthrough() {
@@ -204,11 +207,18 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
                     val touchableRegionField = insets.javaClass.getField("touchableRegion")
                     val region = touchableRegionField.get(insets) as Region
 
-                    // 統一使用 Region 模式，由 UI 組件決定哪些地方可點擊
+                    // 統一使用 Region 模式
                     setTouchableInsets.invoke(insets, 3) // TOUCHABLE_INSETS_REGION
                     region.setEmpty()
-                    overlayState.interactiveBounds.values.forEach { rect ->
-                        region.union(rect)
+                    
+                    // 遍歷所有註冊區域
+                    overlayState.interactiveBounds.forEach { (key, rect) ->
+                        // 如果鎖定中，跳過圖片區域，使其可穿透
+                        if (overlayState.isLocked && key == "image") {
+                            // Skip
+                        } else {
+                            region.union(rect)
+                        }
                     }
                 }
                 null
