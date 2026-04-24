@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.common.dialogs
+package com.example.poseoverlay.common.dialogs
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer

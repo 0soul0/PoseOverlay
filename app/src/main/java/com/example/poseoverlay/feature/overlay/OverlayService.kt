@@ -1,28 +1,29 @@
-package com.example.poseoverlay
+package com.example.poseoverlay.feature.overlay
 
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.PixelFormat
+import android.graphics.Region
 import android.net.Uri
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowManager
-import android.content.res.Resources
-import androidx.activity.result.ActivityResultRegistry
-import androidx.activity.result.ActivityResultRegistryOwner
-import androidx.activity.result.contract.ActivityResultContract
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.cancel
-import androidx.annotation.RequiresApi
 import androidx.compose.ui.platform.ComposeView
-import androidx.core.app.ActivityOptionsCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.*
 import androidx.savedstate.*
-import androidx.core.net.toUri
-import com.example.poseoverlay.ui.common.AppConstants
+import com.example.poseoverlay.MainActivity
+import com.example.poseoverlay.R
+import com.example.poseoverlay.common.AppConstants
+import com.example.poseoverlay.data.AppDatabase
+import com.example.poseoverlay.data.ImageRepository
+import com.example.poseoverlay.feature.overlay.ui.OverlayComposeView
+import kotlinx.coroutines.*
+import java.lang.reflect.Proxy
 
 class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
 
@@ -37,41 +38,42 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: ComposeView
     private lateinit var params: WindowManager.LayoutParams
-    
+
     // State holder
     private val overlayState = OverlayState()
 
+
+
     // Dependencies
-    private lateinit var repository: com.example.poseoverlay.data.ImageRepository
-    private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.Job())
+    private lateinit var repository: ImageRepository
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreate() {
         super.onCreate()
-        val db = com.example.poseoverlay.data.AppDatabase.getDatabase(applicationContext)
-        repository = com.example.poseoverlay.data.ImageRepository(db.imageDao(),db.categoryDao())
+        val db = AppDatabase.getDatabase(applicationContext)
+        repository = ImageRepository(db.imageDao(), db.categoryDao())
         savedStateRegistryController.performRestore(null)
-        
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        
+
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+
         createNotificationChannel()
-        
+
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else if (Build.VERSION.SDK_INT >= 29) {
-             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
-        } else {
-            startForeground(1, notification)
-        }
+        } else
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
 
         overlayView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@OverlayService)
             setViewTreeViewModelStoreOwner(this@OverlayService)
             setViewTreeSavedStateRegistryOwner(this@OverlayService)
-            
+
             setContent {
                 OverlayComposeView(
                     state = overlayState,
+
                     onToggleTouch = { enabled -> toggleTouchability(enabled) },
                     onMinimize = { toggleMinimize(true) },
                     onMaximize = { toggleMinimize(false) },
@@ -89,8 +91,8 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
                         }
                     },
                     onCategorySelect = { cat -> loadImages(cat) },
-                    onImageSelect = { uri -> 
-                        overlayState.imageUri = Uri.parse(uri.uriString)
+                    onImageSelect = { uri ->
+                        overlayState.imageUri = uri.uriString.toUri()
                         serviceScope.launch {
                             overlayState.noteText = uri.description
                         }
@@ -104,6 +106,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -111,19 +114,21 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         params.gravity = Gravity.TOP or Gravity.START
 
         windowManager.addView(overlayView, params)
-        
+
+        setupTouchPassthrough()
+
         // Start observing categories
         serviceScope.launch {
             repository.getAllCategories().collect { cats ->
                 overlayState.categories = listOf("All") + cats
             }
         }
-        
+
         // Load initial images
         loadImages(AppConstants.Default_CATEGROY)
     }
 
-    private var currentImageJob: kotlinx.coroutines.Job? = null
+    private var currentImageJob: Job? = null
 
     private fun loadImages(category: String) {
         currentImageJob?.cancel()
@@ -136,22 +141,22 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
         overlayState.selectedCategory = category
     }
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+    override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (overlayState.isMinimized) {
             // Reposition bubble to avoid being off-screen after rotation
             val screenWidth = Resources.getSystem().displayMetrics.widthPixels
             val screenHeight = Resources.getSystem().displayMetrics.heightPixels
-            
+
             // Simple logic: maintain relative position or clamp to new bounds
             params.x = params.x.coerceIn(0, screenWidth - 100)
             params.y = params.y.coerceIn(0, screenHeight - 100)
             windowManager.updateViewLayout(overlayView, params)
         } else {
-             // If expanded, ensure dimensions match parent
-             params.width = WindowManager.LayoutParams.MATCH_PARENT
-             params.height = WindowManager.LayoutParams.MATCH_PARENT
-             windowManager.updateViewLayout(overlayView, params)
+            // If expanded, ensure dimensions match parent
+            params.width = WindowManager.LayoutParams.MATCH_PARENT
+            params.height = WindowManager.LayoutParams.MATCH_PARENT
+            windowManager.updateViewLayout(overlayView, params)
         }
     }
 
@@ -163,28 +168,55 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
 
     private fun toggleMinimize(minimize: Boolean) {
         overlayState.isMinimized = minimize
-        if (minimize) {
-            // Shrink window to allow interaction behind
-            params.width = WindowManager.LayoutParams.WRAP_CONTENT
-            params.height = WindowManager.LayoutParams.WRAP_CONTENT
-            
-            // Set initial position for bubble if needed, or keep last known position
-            if (params.x == 0 && params.y == 0) {
-                 val screenWidth = Resources.getSystem().displayMetrics.widthPixels
-                 val screenHeight = Resources.getSystem().displayMetrics.heightPixels
-                 params.x = screenWidth - 200 // Default to right side
-                 params.y = screenHeight / 2
-            }
-        } else {
-            // Restore full screen
-            params.width = WindowManager.LayoutParams.MATCH_PARENT
-            params.height = WindowManager.LayoutParams.MATCH_PARENT
-            params.x = 0
-            params.y = 0
-        }
+
+        // 為了支援全螢幕透傳，我們現在統一使用 MATCH_PARENT
+        // 由 OnComputeInternalInsetsListener 決定哪個局部區域可點擊
+        params.width = WindowManager.LayoutParams.MATCH_PARENT
+        params.height = WindowManager.LayoutParams.MATCH_PARENT
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = 0
+        params.y = 0
+
         windowManager.updateViewLayout(overlayView, params)
     }
-    
+
+    private fun setupTouchPassthrough() {
+        try {
+            val viewTreeObserver = overlayView.viewTreeObserver
+            val listenerClass = Class.forName("android.view.ViewTreeObserver\$OnComputeInternalInsetsListener")
+            val addMethod = viewTreeObserver.javaClass.getMethod("addOnComputeInternalInsetsListener", listenerClass)
+
+            val proxy = Proxy.newProxyInstance(
+                listenerClass.classLoader,
+                arrayOf(listenerClass)
+            ) { _, method, args ->
+                if (method.name == "onComputeInternalInsets") {
+                    val insets = args[0]
+                    val setTouchableInsets = insets.javaClass.getMethod("setTouchableInsets", Int::class.javaPrimitiveType)
+                    val touchableRegionField = insets.javaClass.getField("touchableRegion")
+                    val region = touchableRegionField.get(insets) as Region
+
+                    if (overlayState.isLocked) {
+                        // 鎖定狀態：完全不接收任何觸摸，所有點擊穿透到背景
+                        setTouchableInsets.invoke(insets, 3) // TOUCHABLE_INSETS_REGION
+                        region.setEmpty()
+                    } else {
+                        // 非鎖定：只有有註冊區域的地方才接收觸摸
+                        setTouchableInsets.invoke(insets, 3)
+                        region.setEmpty()
+                        overlayState.interactiveBounds.values.forEach { rect ->
+                            region.union(rect)
+                        }
+                    }
+                }
+                null
+            }
+            addMethod.invoke(viewTreeObserver, proxy)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     /**
      * Toggles touchability.
      */
@@ -195,10 +227,10 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         windowManager.updateViewLayout(overlayView, params)
-        
+
         if (!enabled) {
             val notification = createNotification(includeUnlockAction = true)
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.notify(1, notification)
         }
     }
@@ -209,9 +241,10 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
             ACTION_UNLOCK -> {
                 toggleTouchability(true)
                 overlayState.isLocked = false
-                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.notify(1, createNotification(includeUnlockAction = false))
             }
+
             ACTION_SET_IMAGE -> {
                 val uriString = intent.getStringExtra(EXTRA_IMAGE_URI)
                 if (uriString != null) {
@@ -220,7 +253,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
                     if (overlayState.isMinimized) {
                         toggleMinimize(false)
                     }
-                    
+
                     serviceScope.launch {
                         val imageEntity = repository.getImageByUri(uriString)
                         overlayState.noteText = imageEntity?.description ?: ""
@@ -237,7 +270,7 @@ class OverlayService : LifecycleService(), SavedStateRegistryOwner, ViewModelSto
             "Overlay Service",
             NotificationManager.IMPORTANCE_LOW
         )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
     }
 

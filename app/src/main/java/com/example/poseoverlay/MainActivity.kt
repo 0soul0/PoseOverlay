@@ -1,5 +1,6 @@
 package com.example.poseoverlay
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -19,12 +20,17 @@ import androidx.navigation.*
 import androidx.navigation.compose.*
 import com.example.poseoverlay.data.AppDatabase
 import com.example.poseoverlay.data.ImageRepository
-import com.example.poseoverlay.ui.common.AppConstants
-import com.example.poseoverlay.ui.gallery.*
-import com.example.poseoverlay.ui.gallery.screens.*
-import com.example.poseoverlay.ui.navigation.NavigationEvent
-import com.example.poseoverlay.ui.navigation.Screen
-import com.example.poseoverlay.ui.theme.PoseOverlayTheme
+import com.example.poseoverlay.feature.overlay.OverlayService
+import com.example.poseoverlay.common.AppConstants
+import com.example.poseoverlay.feature.gallery.GalleryScreen
+import com.example.poseoverlay.feature.gallery.GalleryViewModel
+import com.example.poseoverlay.feature.gallery.GalleryViewModelFactory
+import com.example.poseoverlay.feature.gallery.screens.AlbumsScreen
+import com.example.poseoverlay.feature.gallery.screens.ImageDetailScreen
+import com.example.poseoverlay.feature.gallery.screens.ImageEditOrAddScreen
+import com.example.poseoverlay.navigation.NavigationEvent
+import com.example.poseoverlay.navigation.Screen
+import com.example.poseoverlay.theme.PoseOverlayTheme
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class) // For BadgedBox if used, or just suppression
@@ -56,7 +62,7 @@ class MainActivity : ComponentActivity() {
         checkPermission()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         setContent {

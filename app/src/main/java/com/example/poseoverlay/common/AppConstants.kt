@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.common
+package com.example.poseoverlay.common
 
 object AppConstants {
 

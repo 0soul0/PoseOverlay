@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.theme
+package com.example.poseoverlay.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes

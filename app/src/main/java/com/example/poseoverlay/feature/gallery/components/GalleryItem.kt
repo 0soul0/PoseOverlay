@@ -1,5 +1,6 @@
-package com.example.poseoverlay.ui.gallery.components
+package com.example.poseoverlay.feature.gallery.components
 
+import android.util.Log
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -49,7 +50,7 @@ fun GalleryItem(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "scale"
     )
-
+    Log.d("GalleryItem", "GalleryItem uri: "+image.uriString)
     Box(
         modifier = Modifier
             .fillMaxSize()

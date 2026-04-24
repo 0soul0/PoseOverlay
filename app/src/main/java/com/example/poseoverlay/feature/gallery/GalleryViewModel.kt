@@ -1,17 +1,18 @@
-package com.example.poseoverlay.ui.gallery
+package com.example.poseoverlay.feature.gallery
 
 import android.app.Application
-import android.net.Uri
 import android.util.Log
 import androidx.core.net.toUri
 import androidx.lifecycle.*
 import com.example.poseoverlay.data.ImageEntity
 import com.example.poseoverlay.data.ImageRepository
-import com.example.poseoverlay.ui.common.AppConstants
-import com.example.poseoverlay.ui.navigation.INavigationHandler
-import com.example.poseoverlay.ui.navigation.NavigationHandler
+import com.example.poseoverlay.common.AppConstants
+import com.example.poseoverlay.navigation.INavigationHandler
+import com.example.poseoverlay.navigation.NavigationHandler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileInputStream
 
 class GalleryViewModel(
     application: Application,
@@ -72,11 +73,11 @@ class GalleryViewModel(
                 val uri = image.uriString.toUri()
                 val context = getApplication<Application>()
                 val fileName = "img_${System.currentTimeMillis()}.jpg"
-                val destFile = java.io.File(context.filesDir, fileName)
+                val destFile = File(context.filesDir, fileName)
 
                 // file:// used for cache copies; content:// used as fallback
                 val inputStream = when (uri.scheme) {
-                    "file" -> java.io.FileInputStream(java.io.File(requireNotNull(uri.path)))
+                    "file" -> FileInputStream(File(requireNotNull(uri.path)))
                     else -> context.contentResolver.openInputStream(uri)
                 }
 

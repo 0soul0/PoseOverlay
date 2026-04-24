@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.gallery.screens
+package com.example.poseoverlay.feature.gallery.screens
 
 import android.net.Uri
 import androidx.compose.foundation.*
@@ -17,8 +17,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.poseoverlay.data.ImageEntity
-import com.example.poseoverlay.ui.common.AppConstants
-import com.example.poseoverlay.ui.gallery.GalleryViewModel
+import com.example.poseoverlay.common.AppConstants
+import com.example.poseoverlay.feature.gallery.GalleryViewModel
 
 const val TYPE_EDIT = "Edit"
 const val TYPE_ADD = "Add"

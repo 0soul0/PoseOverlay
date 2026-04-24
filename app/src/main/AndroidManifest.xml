@@ -21,7 +21,7 @@
         android:theme="@style/Theme.PoseOverlay"
         tools:targetApi="31">
         <service
-            android:name=".OverlayService"
+            android:name=".feature.overlay.OverlayService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse"

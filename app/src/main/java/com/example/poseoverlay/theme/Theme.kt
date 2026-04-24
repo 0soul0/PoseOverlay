@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.theme
+package com.example.poseoverlay.theme
 
 import android.app.Activity
 import android.os.Build

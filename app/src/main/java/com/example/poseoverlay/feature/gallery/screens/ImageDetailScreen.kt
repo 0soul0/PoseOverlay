@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.gallery.screens
+package com.example.poseoverlay.feature.gallery.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,9 +18,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
-import com.example.poseoverlay.ui.common.dialogs.DeleteImageDialog
-import com.example.poseoverlay.ui.common.dialogs.InfoImageDialog
-import com.example.poseoverlay.ui.gallery.GalleryViewModel
+import com.example.poseoverlay.common.dialogs.DeleteImageDialog
+import com.example.poseoverlay.common.dialogs.InfoImageDialog
+import com.example.poseoverlay.feature.gallery.GalleryViewModel
 
 
 @Composable

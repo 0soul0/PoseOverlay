@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.navigation
+package com.example.poseoverlay.navigation
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

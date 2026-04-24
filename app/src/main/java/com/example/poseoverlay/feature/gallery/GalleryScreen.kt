@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.gallery
+package com.example.poseoverlay.feature.gallery
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -21,11 +21,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.poseoverlay.data.ImageEntity
-import com.example.poseoverlay.ui.common.AppConstants
-import com.example.poseoverlay.ui.common.dialogs.DeleteImageDialog
-import com.example.poseoverlay.ui.gallery.components.AddImageGridItem
-import com.example.poseoverlay.ui.gallery.components.GalleryItem
-import com.example.poseoverlay.ui.theme.PoseOverlayTheme
+import com.example.poseoverlay.common.AppConstants
+import com.example.poseoverlay.common.dialogs.DeleteImageDialog
+import com.example.poseoverlay.feature.gallery.components.AddImageGridItem
+import com.example.poseoverlay.feature.gallery.components.GalleryItem
+import com.example.poseoverlay.theme.PoseOverlayTheme
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Stateful wrapper — owns ViewModel + Activity launchers

@@ -1,4 +1,4 @@
-package com.example.poseoverlay.ui.navigation
+package com.example.poseoverlay.navigation
 
 sealed class NavigationEvent {
     data class NavigateToImageEdit(val uriString: String) : NavigationEvent()
